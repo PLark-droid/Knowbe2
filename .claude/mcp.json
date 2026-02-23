@@ -46,8 +46,8 @@
       "env": {
         "AI_GUIDES_API_URL": "http://localhost:8888"
       },
-      "disabled": false,
-      "description": "Context Engineering - AI-powered context analysis, optimization, and semantic search"
+      "disabled": true,
+      "description": "Context Engineering - AI-powered context analysis, optimization, and semantic search (disabled: external/ not yet set up)"
     },
     "miyabi": {
       "command": "node",

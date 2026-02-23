@@ -1,186 +1,158 @@
-# Knowbe2 - Claude Code Context
+# Knowbe2 - Claude Code Context (Miyabi v0.20.0)
 
 ## プロジェクト概要
 
-**Knowbe2** - Miyabiフレームワークで構築された自律型開発プロジェクト
+**Knowbe2** - Miyabi Framework v0.20.0 で構築された自律型開発プラットフォーム
 
-このプロジェクトは識学理論(Shikigaku Theory)とAI Agentsを組み合わせた自律型開発環境で運用されています。
+識学理論(Shikigaku Theory) + AI Agents + Pipeline Execution による完全自律開発環境。
 
-## 🌸 Miyabi Framework
+## 🌸 Miyabi Framework v0.20.0
 
-### 7つの自律エージェント
+### 7つの Coding Agents
 
-1. **CoordinatorAgent** - タスク統括・並列実行制御
-   - DAG（Directed Acyclic Graph）ベースのタスク分解
-   - Critical Path特定と並列実行最適化
+| # | Agent | キャラ名 | 役割 | カラー |
+|---|-------|---------|------|--------|
+| 1 | CoordinatorAgent | しきろーん | タスク統括・DAG分解 | 🔴 Leader |
+| 2 | CodeGenAgent | つくろーん | AI コード生成 | 🟢 Executor |
+| 3 | ReviewAgent | めだまん | 品質スコアリング (80点合格) | 🔵 Analyst |
+| 4 | IssueAgent | みつけろーん | Issue分析・72ラベル体系 | 🔵 Analyst |
+| 5 | PRAgent | まとめろーん | PR自動作成 (Conventional Commits) | 🟢 Executor |
+| 6 | DeploymentAgent | はこぼーん | CI/CDデプロイ・自動Rollback | 🟢 Executor |
+| 7 | TestAgent | つなぐん | テスト実行・カバレッジ80%+ | 🟢 Executor |
 
-2. **IssueAgent** - Issue分析・ラベル管理
-   - 識学理論65ラベル体系による自動分類
-   - タスク複雑度推定（小/中/大/特大）
+### GitHub as OS
 
-3. **CodeGenAgent** - AI駆動コード生成
-   - Claude Sonnet 4による高品質コード生成
-   - TypeScript strict mode完全対応
-
-4. **ReviewAgent** - コード品質判定
-   - 静的解析・セキュリティスキャン
-   - 品質スコアリング（100点満点、80点以上で合格）
-
-5. **PRAgent** - Pull Request自動作成
-   - Conventional Commits準拠
-   - Draft PR自動生成
-
-6. **DeploymentAgent** - CI/CDデプロイ自動化
-   - 自動デプロイ・ヘルスチェック
-   - 自動Rollback機能
-
-7. **TestAgent** - テスト自動実行
-   - テスト実行・カバレッジレポート
-   - 80%+カバレッジ目標
-
-## GitHub OS Integration
-
-このプロジェクトは「GitHubをOSとして扱う」設計思想で構築されています:
-
-### 自動化されたワークフロー
-
-1. **Issue作成** → IssueAgentが自動ラベル分類
-2. **CoordinatorAgent** → タスクをDAG分解、並列実行プラン作成
-3. **CodeGenAgent** → コード実装、テスト生成
-4. **ReviewAgent** → 品質チェック（80点以上で次へ）
-5. **TestAgent** → テスト実行（カバレッジ確認）
-6. **PRAgent** → Draft PR作成
-7. **DeploymentAgent** → マージ後に自動デプロイ
-
-**全工程が自律実行、人間の介入は最小限。**
-
-## ラベル体系（識学理論準拠）
-
-### 10カテゴリー、53ラベル
-
-- **type:** bug, feature, refactor, docs, test, chore, security
-- **priority:** P0-Critical, P1-High, P2-Medium, P3-Low
-- **state:** pending, analyzing, implementing, reviewing, testing, deploying, done
-- **agent:** codegen, review, deployment, test, coordinator, issue, pr
-- **complexity:** small, medium, large, xlarge
-- **phase:** planning, design, implementation, testing, deployment
-- **impact:** breaking, major, minor, patch
-- **category:** frontend, backend, infra, dx, security
-- **effort:** 1h, 4h, 1d, 3d, 1w, 2w
-- **blocked:** waiting-review, waiting-deployment, waiting-feedback
+```
+Issue作成 → IssueAgent(ラベル分類)
+  → CoordinatorAgent(DAG分解)
+    → CodeGenAgent(実装) + TestAgent(テスト)
+      → ReviewAgent(品質80点+)
+        → PRAgent(Draft PR)
+          → DeploymentAgent(自動デプロイ)
+```
 
 ## 開発ガイドライン
 
-### TypeScript設定
+### TypeScript (strict mode)
 
 ```json
 {
-  "compilerOptions": {
-    "strict": true,
-    "module": "ESNext",
-    "target": "ES2022"
-  }
+  "strict": true,
+  "module": "ESNext",
+  "target": "ES2022",
+  "noImplicitReturns": true,
+  "noFallthroughCasesInSwitch": true
 }
 ```
-
-### セキュリティ
-
-- **機密情報は環境変数で管理**: `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`
-- **.env を .gitignore に含める**
-- **Webhook検証**: HMAC-SHA256署名検証
 
 ### テスト
 
 ```bash
 npm test                    # 全テスト実行
 npm run test:watch          # Watch mode
-npm run test:coverage       # カバレッジレポート
+npm run test:coverage       # カバレッジレポート (閾値: 80%)
 ```
 
-目標: 80%+ カバレッジ
-
-## 使用方法
-
-### Issue作成（Claude Code推奨）
+### Pipeline
 
 ```bash
-# Claude Code から直接実行
-gh issue create --title "機能追加: ユーザー認証" --body "JWT認証を実装"
+npm run pipeline -- "/agent-run | /review | /deploy"
+npm run pipeline -- --preset full-cycle --issue 123
+npm run pipeline -- --preset quality-gate --dry-run
 ```
 
-または Claude Code のスラッシュコマンド:
+## スラッシュコマンド (14)
 
-```
-/create-issue
-```
+| コマンド | 説明 |
+|---------|------|
+| `/test` | テスト実行 |
+| `/review` | Interactive Review Loop (6項目, 反復最大10回) |
+| `/create-issue` | Issue対話作成 |
+| `/agent-run` | Agent自動処理パイプライン |
+| `/deploy` | デプロイ実行 |
+| `/verify` | 環境・コンパイル・テスト全チェック |
+| `/generate-docs` | ドキュメント自動生成 |
+| `/security-scan` | セキュリティスキャン |
+| `/miyabi-status` | ステータス確認 |
+| `/miyabi-auto` | Water Spider全自動モード |
+| `/miyabi-agent` | Agent手動実行 |
+| `/miyabi-todos` | TODO検出 → Issue化 |
+| `/miyabi-init` | 新規プロジェクト作成 |
+| `/PIPELINE_GUIDE` | パイプラインガイド |
 
-### 状態確認
+## Hooks (6)
 
-```bash
-npx miyabi status          # 現在の状態
-npx miyabi status --watch  # リアルタイム監視
-```
+| Hook | ファイル | 用途 |
+|------|---------|------|
+| UserPromptSubmit | log-commands.sh | LDDログ記録 |
+| PreToolUse | validate-typescript.sh | TypeScript検証 |
+| PostToolUse | auto-format.sh | ESLint自動フォーマット |
+| Agent Event | agent-event.sh | ダッシュボード通知 |
+| Session | session-continue.sh | tmux自動継続 |
+| Webhook | webhook-fallback.js | キュー付きWebhook送信 |
 
-### Agent実行
+## ラベル体系 (72ラベル, 識学理論準拠)
 
-```bash
-/agent-run                 # Claude Code から実行
-```
+10カテゴリー:
+- **type:** bug, feature, refactor, docs, test, chore, security
+- **priority:** P0-Critical, P1-High, P2-Medium, P3-Low
+- **state:** pending, analyzing, implementing, reviewing, testing, deploying, done, blocked, paused
+- **agent:** codegen, review, deployment, test, coordinator, issue, pr
+- **complexity:** small, medium, large, xlarge
+- **phase:** planning, design, development, review, deployment
+- **impact:** breaking, major, minor, patch
+- **category:** frontend, backend, infra, dx, security
+- **effort:** 1h, 4h, 1d, 3d, 1w, 2w
+- **blocked:** waiting-review, waiting-deployment, waiting-feedback
 
 ## プロジェクト構造
 
 ```
 Knowbe2/
-├── .claude/               # Claude Code設定
-│   ├── agents/           # Agent定義
-│   ├── commands/         # カスタムコマンド
-│   └── settings.json     # Claude設定
-├── .github/
-│   └── workflows/        # 26+ GitHub Actions
-├── src/                  # ソースコード
-├── tests/                # テストコード
-├── CLAUDE.md             # このファイル
-└── package.json
+├── .claude/
+│   ├── agents/          # 7 Agent定義 + Characters + Protocol + Metrics
+│   ├── commands/        # 14 コマンド + Pipeline Guide
+│   ├── hooks/           # 6 hooks (logging, validation, formatting, events)
+│   ├── skills/          # 11 skills (git, github, system, etc.)
+│   ├── mcp-servers/     # 4 MCP servers
+│   ├── mcp.json         # MCP設定
+│   └── settings.json    # Claude Code設定
+├── .github/workflows/   # 14 GitHub Actions
+├── src/
+│   ├── agents/          # Agent実装 (BaseAgent)
+│   ├── types/           # 型定義
+│   └── utils/           # DAG, Logger
+├── tests/               # Vitest テスト
+├── dist/                # ビルド出力
+├── package.json         # v0.20.0
+├── tsconfig.json        # strict mode
+├── vitest.config.ts     # coverage 80% threshold
+└── CLAUDE.md            # このファイル
 ```
 
-## カスタムスラッシュコマンド
+## セキュリティ
 
-Claude Code で以下のコマンドが使用可能:
-
-- `/test` - プロジェクト全体のテストを実行
-- `/generate-docs` - コードからドキュメント自動生成
-- `/create-issue` - Agent実行用Issueを対話的に作成
-- `/deploy` - デプロイ実行
-- `/verify` - システム動作確認（環境・コンパイル・テスト）
-- `/security-scan` - セキュリティ脆弱性スキャン実行
-- `/agent-run` - Autonomous Agent実行（Issue自動処理パイプライン）
-
-## 識学理論（Shikigaku Theory）5原則
-
-1. **責任の明確化** - 各AgentがIssueに対する責任を負う
-2. **権限の委譲** - Agentは自律的に判断・実行可能
-3. **階層の設計** - CoordinatorAgent → 各専門Agent
-4. **結果の評価** - 品質スコア、カバレッジ、実行時間で評価
-5. **曖昧性の排除** - DAGによる依存関係明示、状態ラベルで進捗可視化
+- 機密情報は環境変数で管理: `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`
+- `.env` は `.gitignore` に含まれている
+- Webhook検証: HMAC-SHA256署名
 
 ## 環境変数
 
 ```bash
-# GitHub Personal Access Token（必須）
-GITHUB_TOKEN=ghp_xxxxx
-
-# Anthropic API Key（必須 - Agent実行時）
-ANTHROPIC_API_KEY=sk-ant-xxxxx
+GITHUB_TOKEN=ghp_xxxxx         # GitHub PAT (必須)
+ANTHROPIC_API_KEY=sk-ant-xxxxx # Anthropic API Key (Agent実行時)
+MIYABI_WEBHOOK_URL=             # Webhook URL (オプション)
 ```
 
-## サポート
+## 識学理論 5原則
+
+1. **責任の明確化** - 各Agentが固有の責任範囲を持つ
+2. **権限の委譲** - Leader → Executor/Analyst への権限委譲
+3. **階層の設計** - Human → Coordinator → Specialist の3層構造
+4. **結果の評価** - 品質スコア、カバレッジ、SLAで客観評価
+5. **曖昧性の排除** - DAG依存関係明示、ラベルで状態可視化
+
+## リンク
 
 - **Framework**: [Miyabi](https://github.com/ShunsukeHayashi/Autonomous-Operations)
-- **Documentation**: README.md
-- **Issues**: GitHub Issues で管理
-
----
-
-🌸 **Miyabi** - Beauty in Autonomous Development
-
-*このファイルは Claude Code が自動的に参照します。プロジェクトの変更に応じて更新してください。*
+- **Repository**: [PLark-droid/Knowbe2](https://github.com/PLark-droid/Knowbe2)
