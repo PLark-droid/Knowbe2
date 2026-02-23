@@ -10,7 +10,7 @@ allowed-tools:
 
 # Miyabi Developer Tools
 
-14 tools for time, math, generation, and thinking.
+13 tools for time, math, generation, and thinking.
 
 ## Time (4 tools)
 
@@ -41,7 +41,7 @@ allowed-tools:
 
 | Tool | Description |
 |------|-------------|
-| `think_*` | Start structured thinking session |
+| `think_step` | Record a reasoning step in structured thinking |
 | `think_branch` | Create alternative thinking branch |
 | `think_summarize` | Summarize session with insights |
 
