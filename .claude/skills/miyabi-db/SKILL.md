@@ -11,6 +11,8 @@ allowed-tools:
 
 ## Available Tools
 
+All tools accept a `type` field with one of `sqlite`, `postgresql`, or `mysql`. Supply either a full connection string or host/port/database/user/password (or file path for SQLite).
+
 | Tool | Description |
 |------|-------------|
 | `db_connect` | Test database connectivity for SQLite, PostgreSQL, or MySQL (connection string or host/port/database/user/password). |
