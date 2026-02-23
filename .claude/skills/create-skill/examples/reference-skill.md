@@ -1,6 +1,9 @@
 ---
 name: api-conventions
-description: API design patterns for this codebase. Use when designing endpoints, writing API code, or reviewing API contracts.
+description: >-
+  API design patterns for this codebase.
+  Use when designing endpoints, writing API code, or reviewing API contracts.
+  Keywords: API, REST, endpoint, route, handler
 ---
 
 # API Conventions

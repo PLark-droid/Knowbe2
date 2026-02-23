@@ -1,27 +1,32 @@
 ---
 name: your-skill-name
-description: What this skill does and when to use it. Include keywords users naturally say.
+description: >-
+  What this skill does in one sentence.
+  Use when [scenario 1], [scenario 2], or [scenario 3].
+  Keywords: keyword1, keyword2, keyword3
 disable-model-invocation: false
-allowed-tools: Read, Grep
 argument-hint: [optional-args]
+allowed-tools: Read, Grep, Glob
 ---
 
 # Your Skill Name
 
 ## Overview
 
-Explain what this skill does and why someone would use it.
+What this skill does and why someone would use it (2 sentences max).
 
 ## Steps
 
-1. **Step 1** — Description
-2. **Step 2** — Description
-3. **Step 3** — Description
+1. **Step 1 title** — What to do and why
+2. **Step 2 title** — What to do and why
+3. **Step 3 title** — What to do and why
 
 ## Arguments
 
-- `$ARGUMENTS` — All arguments passed
-- `$0` — First argument (e.g., file path, issue number)
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `$0` | First argument | `some-value` |
+| `$1` | Second argument (if any) | `another-value` |
 
 ## Example
 
@@ -29,9 +34,10 @@ Explain what this skill does and why someone would use it.
 /your-skill-name some-argument
 ```
 
-Expected behavior: describe what happens.
+Expected: describe what happens.
 
 ## Constraints
 
 - What to avoid
 - Limitations
+- Security considerations
