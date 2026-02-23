@@ -2,7 +2,7 @@
 name: miyabi-tmux
 description: Tmux terminal multiplexer management. Use when listing sessions, managing windows and panes, sending commands to terminals, capturing output, or monitoring running processes in tmux.
 allowed-tools:
-  - mcp__miyabi__tmux_*
+  - mcp__miyabi-mcp-bundle__tmux_*
 ---
 
 # Miyabi Tmux Monitor

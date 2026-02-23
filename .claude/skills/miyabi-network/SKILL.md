@@ -2,7 +2,7 @@
 name: miyabi-network
 description: Network diagnostics and monitoring. Use when checking network interfaces, connections, ports, DNS, ping, traceroute, SSL certificates, bandwidth, WiFi, routing, or debugging connectivity issues.
 allowed-tools:
-  - mcp__miyabi__network_*
+  - mcp__miyabi-mcp-bundle__network_*
 ---
 
 # Miyabi Network Inspector

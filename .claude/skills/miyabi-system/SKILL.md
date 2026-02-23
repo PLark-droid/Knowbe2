@@ -2,9 +2,9 @@
 name: miyabi-system
 description: System monitoring and diagnostics. Use when checking CPU, memory, disk usage, system load, processes, battery, temperature, log analysis, error investigation, or performance troubleshooting.
 allowed-tools:
-  - mcp__miyabi__resource_*
-  - mcp__miyabi__process_*
-  - mcp__miyabi__log_*
+  - mcp__miyabi-mcp-bundle__resource_*
+  - mcp__miyabi-mcp-bundle__process_*
+  - mcp__miyabi-mcp-bundle__log_*
 ---
 
 # Miyabi System Monitor

@@ -2,7 +2,7 @@
 name: miyabi-git
 description: Git repository inspection and analysis. Use when checking git status, viewing commit history, comparing diffs, tracking file changes, viewing blame, managing branches, stashes, tags, worktrees, submodules, or resolving merge conflicts.
 allowed-tools:
-  - mcp__miyabi__git_*
+  - mcp__miyabi-mcp-bundle__git_*
 ---
 
 # Miyabi Git Inspector

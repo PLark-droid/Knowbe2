@@ -2,7 +2,7 @@
 name: miyabi-speckit
 description: Spec-Kit specification-driven development. Use when initializing specs, creating feature specifications, generating implementation plans, creating task lists, checklists, or analyzing spec-to-code consistency.
 allowed-tools:
-  - mcp__miyabi__speckit_*
+  - mcp__miyabi-mcp-bundle__speckit_*
 ---
 
 # Miyabi Spec-Kit

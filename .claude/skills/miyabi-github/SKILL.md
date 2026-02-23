@@ -2,7 +2,7 @@
 name: miyabi-github
 description: GitHub repository management via API. Use when working with GitHub issues, pull requests, labels, milestones, branches, releases, workflows, code reviews, or repository information.
 allowed-tools:
-  - mcp__miyabi__github_*
+  - mcp__miyabi-mcp-bundle__github_*
 ---
 
 # Miyabi GitHub Integration

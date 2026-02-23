@@ -2,10 +2,10 @@
 name: miyabi-devtools
 description: Developer utilities including time/timezone conversion, math calculations, unit conversion, statistics, UUID generation, random numbers, hashing, and structured thinking sessions.
 allowed-tools:
-  - mcp__miyabi__time_*
-  - mcp__miyabi__calc_*
-  - mcp__miyabi__gen_*
-  - mcp__miyabi__think_*
+  - mcp__miyabi-mcp-bundle__time_*
+  - mcp__miyabi-mcp-bundle__calc_*
+  - mcp__miyabi-mcp-bundle__gen_*
+  - mcp__miyabi-mcp-bundle__think_*
 ---
 
 # Miyabi Developer Tools

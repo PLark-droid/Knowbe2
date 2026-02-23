@@ -2,7 +2,7 @@
 name: miyabi-files
 description: File system inspection and analysis. Use when checking file metadata, finding recently changed files, searching files by pattern, viewing directory trees, comparing files, calculating checksums, finding duplicates, or analyzing directory sizes.
 allowed-tools:
-  - mcp__miyabi__file_*
+  - mcp__miyabi-mcp-bundle__file_*
 ---
 
 # Miyabi File Inspector

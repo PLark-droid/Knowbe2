@@ -2,11 +2,11 @@
 name: miyabi-claude
 description: Claude Code integration, MCP server management, and system health checks. Use when checking Claude config, MCP server status, Claude logs, background shells, searching MCP tools, or running health diagnostics.
 allowed-tools:
-  - mcp__miyabi__claude_*
-  - mcp__miyabi__mcp_*
-  - mcp__miyabi__health_*
-  - mcp__miyabi__linux_*
-  - mcp__miyabi__windows_*
+  - mcp__miyabi-mcp-bundle__claude_*
+  - mcp__miyabi-mcp-bundle__mcp_*
+  - mcp__miyabi-mcp-bundle__health_*
+  - mcp__miyabi-mcp-bundle__linux_*
+  - mcp__miyabi-mcp-bundle__windows_*
 ---
 
 # Miyabi Claude & MCP Integration

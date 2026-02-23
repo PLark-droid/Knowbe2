@@ -2,9 +2,9 @@
 name: miyabi-containers
 description: Docker, Docker Compose, and Kubernetes container management. Use when working with containers, images, volumes, Compose services, pods, deployments, or container orchestration.
 allowed-tools:
-  - mcp__miyabi__docker_*
-  - mcp__miyabi__compose_*
-  - mcp__miyabi__k8s_*
+  - mcp__miyabi-mcp-bundle__docker_*
+  - mcp__miyabi-mcp-bundle__compose_*
+  - mcp__miyabi-mcp-bundle__k8s_*
 ---
 
 # Miyabi Container Operations
