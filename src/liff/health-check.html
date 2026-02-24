@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>体調チェック - Knowbe2</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
+        Meiryo, sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      line-height: 1.6;
+      padding: 16px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      text-align: center;
+      margin-bottom: 24px;
+      color: #1a1a2e;
+    }
+
+    .form-group {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+      color: #1a1a2e;
+    }
+
+    .form-group .hint {
+      font-size: 0.8rem;
+      color: #888;
+      font-weight: 400;
+      margin-left: 4px;
+    }
+
+    /* Score radio buttons as emoji cards */
+    .score-options {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .score-options input[type="radio"] {
+      display: none;
+    }
+
+    .score-options label {
+      flex: 1;
+      text-align: center;
+      padding: 12px 4px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 400;
+    }
+
+    .score-options label .emoji {
+      display: block;
+      font-size: 1.8rem;
+      margin-bottom: 4px;
+    }
+
+    .score-options label .score-label {
+      display: block;
+      font-size: 0.7rem;
+      color: #888;
+    }
+
+    .score-options input[type="radio"]:checked + label {
+      border-color: #4caf50;
+      background-color: #e8f5e9;
+    }
+
+    /* Sleep hours input */
+    .sleep-input {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sleep-input input[type="number"] {
+      width: 80px;
+      padding: 10px 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .sleep-input input[type="number"]:focus {
+      border-color: #4caf50;
+    }
+
+    .sleep-input .unit {
+      font-size: 0.95rem;
+      color: #666;
+    }
+
+    /* Meal checkboxes */
+    .meal-options {
+      display: flex;
+      gap: 12px;
+    }
+
+    .meal-options label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 400;
+      font-size: 0.9rem;
+    }
+
+    .meal-options input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #4caf50;
+    }
+
+    .meal-options input[type="checkbox"]:checked + span {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+
+    /* Textarea */
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 80px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus {
+      border-color: #4caf50;
+    }
+
+    textarea::placeholder {
+      color: #bbb;
+    }
+
+    /* Submit button */
+    .submit-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background-color: #4caf50;
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: 8px;
+    }
+
+    .submit-btn:hover {
+      background-color: #43a047;
+    }
+
+    .submit-btn:active {
+      background-color: #388e3c;
+    }
+
+    .submit-btn:disabled {
+      background-color: #bdbdbd;
+      cursor: not-allowed;
+    }
+
+    /* Status message */
+    .status {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 0.9rem;
+      min-height: 24px;
+    }
+
+    .status.error {
+      color: #d32f2f;
+    }
+
+    .status.success {
+      color: #2e7d32;
+    }
+  </style>
+</head>
+<body>
+  <h1>体調チェック</h1>
+
+  <form id="health-check-form">
+    <!-- Score (1-5) -->
+    <div class="form-group">
+      <label>今日の体調は？<span class="hint">（1〜5で選択）</span></label>
+      <div class="score-options">
+        <input type="radio" id="score1" name="score" value="1" required>
+        <label for="score1">
+          <span class="emoji">&#x1F630;</span>
+          <span class="score-label">1 つらい</span>
+        </label>
+
+        <input type="radio" id="score2" name="score" value="2">
+        <label for="score2">
+          <span class="emoji">&#x1F610;</span>
+          <span class="score-label">2 いまいち</span>
+        </label>
+
+        <input type="radio" id="score3" name="score" value="3">
+        <label for="score3">
+          <span class="emoji">&#x1F642;</span>
+          <span class="score-label">3 ふつう</span>
+        </label>
+
+        <input type="radio" id="score4" name="score" value="4">
+        <label for="score4">
+          <span class="emoji">&#x1F60A;</span>
+          <span class="score-label">4 よい</span>
+        </label>
+
+        <input type="radio" id="score5" name="score" value="5">
+        <label for="score5">
+          <span class="emoji">&#x1F604;</span>
+          <span class="score-label">5 とても良い</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Sleep hours -->
+    <div class="form-group">
+      <label for="sleepHours">睡眠時間</label>
+      <div class="sleep-input">
+        <input type="number" id="sleepHours" name="sleepHours"
+               min="0" max="24" step="0.5" placeholder="7">
+        <span class="unit">時間</span>
+      </div>
+    </div>
+
+    <!-- Meals -->
+    <div class="form-group">
+      <label>食事<span class="hint">（該当するものを選択）</span></label>
+      <div class="meal-options">
+        <label>
+          <input type="checkbox" name="meals" value="breakfast">
+          <span>朝食</span>
+        </label>
+        <label>
+          <input type="checkbox" name="meals" value="lunch">
+          <span>昼食</span>
+        </label>
+        <label>
+          <input type="checkbox" name="meals" value="dinner">
+          <span>夕食</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Mood -->
+    <div class="form-group">
+      <label for="mood">今の気分</label>
+      <textarea id="mood" name="mood" placeholder="例: 少し眠いけど元気です"></textarea>
+    </div>
+
+    <!-- Note -->
+    <div class="form-group">
+      <label for="note">備考</label>
+      <textarea id="note" name="note" placeholder="スタッフへの連絡事項があれば記入してください"></textarea>
+    </div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">送信する</button>
+    <div class="status" id="status"></div>
+  </form>
+
+  <!-- LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/versions/2.24.0/sdk.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var LIFF_ID = ''; // Set your LIFF ID here
+      var API_ENDPOINT = '/api/health-check';
+
+      var form = document.getElementById('health-check-form');
+      var submitBtn = document.getElementById('submitBtn');
+      var statusEl = document.getElementById('status');
+
+      /**
+       * Initialize LIFF SDK
+       */
+      function initLiff() {
+        if (!LIFF_ID) {
+          showStatus('LIFF IDが設定されていません', true);
+          return;
+        }
+        liff.init({ liffId: LIFF_ID }).then(function () {
+          if (!liff.isLoggedIn()) {
+            liff.login();
+          }
+        }).catch(function (err) {
+          showStatus('LIFF初期化エラー: ' + err.message, true);
+        });
+      }
+
+      /**
+       * Show status message
+       * @param {string} message
+       * @param {boolean} isError
+       */
+      function showStatus(message, isError) {
+        statusEl.textContent = message;
+        statusEl.className = 'status ' + (isError ? 'error' : 'success');
+      }
+
+      /**
+       * Collect form data and submit
+       * @param {Event} e
+       */
+      function handleSubmit(e) {
+        e.preventDefault();
+
+        // Validate score
+        var scoreEl = document.querySelector('input[name="score"]:checked');
+        if (!scoreEl) {
+          showStatus('体調スコアを選択してください', true);
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '送信中...';
+
+        // Collect meal checkboxes
+        var mealCheckboxes = document.querySelectorAll('input[name="meals"]');
+        var meals = { breakfast: false, lunch: false, dinner: false };
+        for (var i = 0; i < mealCheckboxes.length; i++) {
+          var cb = mealCheckboxes[i];
+          if (cb.checked) {
+            meals[cb.value] = true;
+          }
+        }
+
+        var sleepInput = document.getElementById('sleepHours');
+        var moodInput = document.getElementById('mood');
+        var noteInput = document.getElementById('note');
+
+        var payload = {
+          score: parseInt(scoreEl.value, 10),
+          sleepHours: sleepInput.value ? parseFloat(sleepInput.value) : null,
+          meals: meals,
+          mood: moodInput.value.trim() || null,
+          note: noteInput.value.trim() || null
+        };
+
+        // Get LIFF access token for authentication
+        var accessToken = '';
+        try {
+          accessToken = liff.getAccessToken() || '';
+        } catch (_unused) {
+          // LIFF not initialized or not logged in
+        }
+
+        fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + accessToken
+          },
+          body: JSON.stringify(payload)
+        })
+          .then(function (res) {
+            if (!res.ok) {
+              throw new Error('送信に失敗しました (HTTP ' + res.status + ')');
+            }
+            return res.json();
+          })
+          .then(function () {
+            showStatus('体調チェックを送信しました', false);
+            submitBtn.textContent = '送信済み';
+
+            // Close LIFF window after short delay
+            setTimeout(function () {
+              if (typeof liff !== 'undefined' && liff.isInClient()) {
+                liff.closeWindow();
+              }
+            }, 1500);
+          })
+          .catch(function (err) {
+            showStatus(err.message, true);
+            submitBtn.disabled = false;
+            submitBtn.textContent = '送信する';
+          });
+      }
+
+      // Initialize
+      initLiff();
+
+      // Bind submit handler
+      form.addEventListener('submit', handleSubmit);
+    })();
+  </script>
+</body>
+</html>
