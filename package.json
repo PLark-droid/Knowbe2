@@ -20,7 +20,7 @@
     "miyabi:agent": "tsx src/cli/agent.ts",
     "miyabi:auto": "tsx src/cli/auto.ts",
     "miyabi:todos": "tsx src/cli/todos.ts",
-    "webhook:server": "tsx src/webhook/server.ts",
+    "webhook:server": "tsx --env-file=.env src/webhook/start.ts",
     "csv:export": "tsx src/cli/export-csv.ts",
     "billing:run": "tsx src/cli/monthly-billing.ts",
     "pipeline": "tsx src/cli/pipeline.ts"
