@@ -1,6 +1,5 @@
 /**
  * StaffRepository - 職員マスタ
- * LINE ID連携メソッド付き
  */
 
 import type { Staff, StaffRole } from '../../types/domain.js';
@@ -8,7 +7,33 @@ import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
 
-// ─── Field Mapping (Japanese ↔ Entity) ──────────────────
+function toRole(raw: unknown): StaffRole {
+  const s = String(raw ?? 'その他');
+  const map: Record<string, StaffRole> = {
+    サービス管理責任者: 'service_manager',
+    職業指導員: 'vocational_instructor',
+    生活支援員: 'life_support_worker',
+    管理者: 'manager',
+    その他: 'other',
+    service_manager: 'service_manager',
+    vocational_instructor: 'vocational_instructor',
+    life_support_worker: 'life_support_worker',
+    manager: 'manager',
+    other: 'other',
+  };
+  return map[s] ?? 'other';
+}
+
+function toRoleLabel(role: StaffRole): string {
+  const map: Record<StaffRole, string> = {
+    service_manager: 'サービス管理責任者',
+    vocational_instructor: '職業指導員',
+    life_support_worker: '生活支援員',
+    manager: '管理者',
+    other: 'その他',
+  };
+  return map[role];
+}
 
 function toEntity(record: LarkBitableRecord): Staff {
   const f = record.fields as Record<string, unknown>;
@@ -17,8 +42,8 @@ function toEntity(record: LarkBitableRecord): Staff {
     facilityId: String(f['事業所ID'] ?? ''),
     name: String(f['氏名'] ?? ''),
     nameKana: String(f['氏名カナ'] ?? ''),
-    role: String(f['役職'] ?? 'other') as StaffRole,
-    lineUserId: f['LINE_UID'] ? String(f['LINE_UID']) : undefined,
+    role: toRole(f['役職']),
+    lineUserId: f['LINE User ID'] ? String(f['LINE User ID']) : undefined,
     email: f['メールアドレス'] ? String(f['メールアドレス']) : undefined,
     isActive: Boolean(f['有効']),
     createdAt: String(f['作成日時'] ?? ''),
@@ -31,14 +56,20 @@ function toFields(entity: Partial<Staff>): Record<string, unknown> {
   if (entity.facilityId !== undefined) fields['事業所ID'] = entity.facilityId;
   if (entity.name !== undefined) fields['氏名'] = entity.name;
   if (entity.nameKana !== undefined) fields['氏名カナ'] = entity.nameKana;
-  if (entity.role !== undefined) fields['役職'] = entity.role;
-  if (entity.lineUserId !== undefined) fields['LINE_UID'] = entity.lineUserId;
+  if (entity.role !== undefined) fields['役職'] = toRoleLabel(entity.role);
+  if (entity.lineUserId !== undefined) fields['LINE User ID'] = entity.lineUserId;
   if (entity.email !== undefined) fields['メールアドレス'] = entity.email;
   if (entity.isActive !== undefined) fields['有効'] = entity.isActive;
+
+  // タイトル列: 表示名を自動生成
+  if (entity.name !== undefined || entity.role !== undefined) {
+    const name = entity.name ?? '';
+    const roleLabel = entity.role !== undefined ? toRoleLabel(entity.role) : '';
+    fields['表示名'] = `${name} (${roleLabel})`;
+  }
+
   return fields;
 }
-
-// ─── Repository ─────────────────────────────────────────
 
 export class StaffRepository {
   constructor(
@@ -46,7 +77,6 @@ export class StaffRepository {
     private readonly tableId: string,
   ) {}
 
-  /** 事業所IDで全職員取得 */
   async findAll(facilityId: string): Promise<Staff[]> {
     const records = await this.client.listAll(this.tableId, {
       filter: `CurrentValue.[事業所ID] = "${sanitizeLarkFilterValue(facilityId)}"`,
@@ -54,41 +84,32 @@ export class StaffRepository {
     return records.map(toEntity);
   }
 
-  /** レコードIDで1件取得 */
   async findById(id: string, expectedFacilityId: string): Promise<Staff | null> {
     const record = await this.client.get(this.tableId, id);
     const entity = toEntity(record);
-    if (entity.facilityId !== expectedFacilityId) {
-      return null;
-    }
-    return entity;
+    return entity.facilityId === expectedFacilityId ? entity : null;
   }
 
-  /** LINE User IDで職員を検索 */
   async findByLineUserId(lineUserId: string): Promise<Staff | null> {
     const records = await this.client.listAll(this.tableId, {
-      filter: `CurrentValue.[LINE_UID] = "${sanitizeLarkFilterValue(lineUserId)}"`,
+      filter: `CurrentValue.[LINE User ID] = "${sanitizeLarkFilterValue(lineUserId)}"`,
     });
-    const first = records[0];
-    return first ? toEntity(first) : null;
+    return records[0] ? toEntity(records[0]) : null;
   }
 
-  /** LINE IDを職員レコードに紐付け */
   async linkLineUserId(id: string, lineUserId: string): Promise<Staff> {
     return this.update(id, { lineUserId });
   }
 
-  /** LINE ID紐付けを解除 */
   async unlinkLineUserId(id: string): Promise<Staff> {
     const fields: Record<string, unknown> = {
-      LINE_UID: null,
-      '更新日時': new Date().toISOString(),
+      'LINE User ID': null,
+      更新日時: new Date().toISOString(),
     };
     const record = await this.client.update(this.tableId, id, fields);
     return toEntity(record);
   }
 
-  /** 新規作成 */
   async create(data: Omit<Staff, 'id' | 'createdAt' | 'updatedAt'>): Promise<Staff> {
     const fields = toFields(data);
     fields['作成日時'] = new Date().toISOString();
@@ -97,7 +118,6 @@ export class StaffRepository {
     return toEntity(record);
   }
 
-  /** 更新 */
   async update(id: string, data: Partial<Staff>): Promise<Staff> {
     const fields = toFields(data);
     fields['更新日時'] = new Date().toISOString();
@@ -105,7 +125,6 @@ export class StaffRepository {
     return toEntity(record);
   }
 
-  /** 削除 */
   async delete(id: string): Promise<void> {
     await this.client.delete(this.tableId, id);
   }

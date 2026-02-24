@@ -3,7 +3,6 @@
  */
 
 import { loadConfig, resetConfig, ConfigError } from '../../src/config/index.js';
-import type { AppConfig } from '../../src/config/index.js';
 
 describe('Config Manager', () => {
   const originalEnv = { ...process.env };

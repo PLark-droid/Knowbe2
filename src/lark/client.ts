@@ -16,6 +16,33 @@ const BASE_URL = 'https://open.larksuite.com/open-apis/bitable/v1';
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_RETRIES = 3;
 
+/** Lark API 共通レスポンスエンベロープ */
+interface LarkApiResponse<D = unknown> {
+  code: number;
+  msg: string;
+  data: D;
+}
+
+/** リトライ可能な Bitable エラーコード (一時的ロック・競合) */
+const RETRYABLE_BITABLE_CODES = new Set([
+  1254007, // record locked
+  1254008, // table locked
+  1254043, // too many concurrent writes
+]);
+
+/** レスポンスの code からリトライ可否を判定する */
+function isRetryableApiError(code: number): boolean {
+  // Bitable 範囲内でリトライ対象のコード
+  if (RETRYABLE_BITABLE_CODES.has(code)) {
+    return true;
+  }
+  // サーバー内部エラー系 (99991xxx) はリトライ可
+  if (code >= 99991000 && code < 99992000) {
+    return true;
+  }
+  return false;
+}
+
 export interface BitableClientConfig {
   auth: LarkAuth;
   appToken: string;
@@ -108,6 +135,8 @@ export class BitableClient {
 
   /** HTTP リクエスト (レート制限リトライ付き) */
   private async request<T>(method: string, url: string, body?: unknown): Promise<T> {
+    const path = url.replace(BASE_URL, '');
+
     return pRetry(
       async () => {
         const token = await this.config.auth.getToken();
@@ -131,7 +160,22 @@ export class BitableClient {
           throw new AbortError(`Lark API error: ${res.status} ${res.statusText}`);
         }
 
-        return (await res.json()) as T;
+        const json = (await res.json()) as LarkApiResponse;
+
+        // Lark は HTTP 200 でも code != 0 でエラーを返す
+        if (json.code !== 0) {
+          const message = `Lark API error [${path}]: code=${json.code} msg=${json.msg}`;
+
+          if (isRetryableApiError(json.code)) {
+            // リトライ可能なエラー → 通常の Error で p-retry がリトライする
+            throw new Error(message);
+          }
+
+          // リトライ不可 → AbortError で即座に失敗させる
+          throw new AbortError(message);
+        }
+
+        return json as unknown as T;
       },
       { retries: MAX_RETRIES },
     );

@@ -74,8 +74,8 @@ export interface LarkSortOption {
 }
 
 export interface LarkWebhookEvent {
-  schema: string;
-  header: {
+  schema?: string;
+  header?: {
     event_id: string;
     event_type: string;
     create_time: string;
@@ -91,6 +91,12 @@ export interface LarkWebhookChallenge {
   token: string;
   type: 'url_verification';
 }
+
+/**
+ * Lark Webhook受信ボディの判別用ユニオン型
+ * url_verification (challenge) の場合は event プロパティが存在しない
+ */
+export type LarkWebhookBody = LarkWebhookEvent | LarkWebhookChallenge;
 
 /** Lark API rate limit info */
 export interface LarkRateLimitInfo {

@@ -1,6 +1,5 @@
 /**
  * WorkSchedule Repository
- * 勤務予定の CRUD + 利用者月別検索
  */
 
 import type { WorkSchedule } from '../../types/domain.js';
@@ -8,69 +7,83 @@ import type { BitableClient } from '../client.js';
 import type { LarkBitableRecord } from '../../types/lark.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
 
-/** scheduledTime を JSON 文字列からパース */
-function parseScheduledTime(
-  raw: unknown,
-): { start: string; end: string } | undefined {
-  if (!raw) return undefined;
-  if (typeof raw === 'object' && raw !== null) {
-    const obj = raw as Record<string, unknown>;
-    if (typeof obj['start'] === 'string' && typeof obj['end'] === 'string') {
-      return { start: obj['start'], end: obj['end'] };
-    }
+function getLinkId(value: unknown): string {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first != null ? String(first) : '';
   }
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof parsed['start'] === 'string' && typeof parsed['end'] === 'string') {
-        return { start: parsed['start'], end: parsed['end'] };
-      }
-    } catch {
-      return undefined;
-    }
+  return value != null ? String(value) : '';
+}
+
+function toLinkValue(id: string | undefined): string[] | undefined {
+  if (!id) return undefined;
+  return [id];
+}
+
+function parseScheduledTime(startRaw: unknown, endRaw: unknown): { start: string; end: string } | undefined {
+  if (typeof startRaw === 'string' && typeof endRaw === 'string') {
+    return { start: startRaw, end: endRaw };
   }
   return undefined;
 }
 
-/** scheduledDays を配列にパース */
 function parseScheduledDays(raw: unknown): number[] {
-  if (Array.isArray(raw)) return raw.map(Number);
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed)) return parsed.map(Number);
-    } catch {
-      return [];
-    }
-  }
-  return [];
+  if (typeof raw !== 'string' || raw.trim() === '') return [];
+  return raw
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 31);
 }
 
-/** Lark レコード → WorkSchedule エンティティ変換 */
+function serializeScheduledDays(days: number[] | undefined): string | undefined {
+  if (!days) return undefined;
+  return days.join(',');
+}
+
+/**
+ * Link型フィールド ('事業所', '利用者') からは record_id を取得しドメインIDとして使用。
+ * フィルタ検索にはテキスト型の '事業所ID' / '利用者ID' フィールドを使用。
+ */
 function toEntity(record: LarkBitableRecord): WorkSchedule {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: String(f['facility_id'] ?? ''),
-    userId: String(f['user_id'] ?? ''),
-    yearMonth: String(f['year_month'] ?? ''),
-    scheduledDays: parseScheduledDays(f['scheduled_days']),
-    scheduledTime: parseScheduledTime(f['scheduled_time']),
-    createdAt: String(f['created_at'] ?? ''),
-    updatedAt: String(f['updated_at'] ?? ''),
+    facilityId: getLinkId(f['事業所']),
+    userId: getLinkId(f['利用者']),
+    yearMonth: String(f['対象年月'] ?? ''),
+    scheduledDays: parseScheduledDays(f['予定出勤日']),
+    scheduledTime: parseScheduledTime(f['開始時刻'], f['終了時刻']),
+    createdAt: String(f['作成日時'] ?? ''),
+    updatedAt: String(f['更新日時'] ?? ''),
   };
 }
 
-/** WorkSchedule エンティティ → Lark フィールド変換 */
 function toFields(entity: Partial<WorkSchedule>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
-  if (entity.facilityId !== undefined) fields['facility_id'] = entity.facilityId;
-  if (entity.userId !== undefined) fields['user_id'] = entity.userId;
-  if (entity.yearMonth !== undefined) fields['year_month'] = entity.yearMonth;
-  if (entity.scheduledDays !== undefined) fields['scheduled_days'] = JSON.stringify(entity.scheduledDays);
-  if (entity.scheduledTime !== undefined) fields['scheduled_time'] = JSON.stringify(entity.scheduledTime);
-  if (entity.createdAt !== undefined) fields['created_at'] = entity.createdAt;
-  if (entity.updatedAt !== undefined) fields['updated_at'] = entity.updatedAt;
+  if (entity.facilityId !== undefined) {
+    fields['事業所'] = toLinkValue(entity.facilityId);
+    fields['事業所ID'] = entity.facilityId; // テキスト型 (フィルタ検索用)
+  }
+  if (entity.userId !== undefined) {
+    fields['利用者'] = toLinkValue(entity.userId);
+    fields['利用者ID'] = entity.userId; // テキスト型 (フィルタ検索用)
+  }
+  if (entity.yearMonth !== undefined) fields['対象年月'] = entity.yearMonth;
+  if (entity.scheduledDays !== undefined) fields['予定出勤日'] = serializeScheduledDays(entity.scheduledDays);
+  if (entity.scheduledTime !== undefined) {
+    fields['開始時刻'] = entity.scheduledTime.start;
+    fields['終了時刻'] = entity.scheduledTime.end;
+  }
+  if (entity.createdAt !== undefined) fields['作成日時'] = entity.createdAt;
+  if (entity.updatedAt !== undefined) fields['更新日時'] = entity.updatedAt;
+
+  // タイトル列: 予定キーを自動生成
+  if (entity.yearMonth !== undefined || entity.userId !== undefined) {
+    const yearMonth = entity.yearMonth ?? '';
+    const userId = entity.userId ?? '';
+    fields['予定キー'] = `${yearMonth}_${userId}`;
+  }
+
   return fields;
 }
 
@@ -80,29 +93,23 @@ export class WorkScheduleRepository {
     private readonly tableId: string,
   ) {}
 
-  /** 事業所 ID で全件取得 */
   async findAll(facilityId: string): Promise<WorkSchedule[]> {
     const records = await this.client.listAll(this.tableId, {
-      filter: `CurrentValue.[facility_id] = "${sanitizeLarkFilterValue(facilityId)}"`,
+      filter: `CurrentValue.[事業所ID] = "${sanitizeLarkFilterValue(facilityId)}"`,
     });
     return records.map(toEntity);
   }
 
-  /** ID で取得 */
   async findById(id: string, expectedFacilityId: string): Promise<WorkSchedule | null> {
     try {
       const record = await this.client.get(this.tableId, id);
       const entity = toEntity(record);
-      if (entity.facilityId !== expectedFacilityId) {
-        return null;
-      }
-      return entity;
+      return entity.facilityId === expectedFacilityId ? entity : null;
     } catch {
       return null;
     }
   }
 
-  /** 利用者 + 年月で検索 */
   async findByUserAndMonth(
     facilityId: string,
     userId: string,
@@ -110,28 +117,24 @@ export class WorkScheduleRepository {
   ): Promise<WorkSchedule | null> {
     const records = await this.client.listAll(this.tableId, {
       filter: [
-        `CurrentValue.[facility_id] = "${sanitizeLarkFilterValue(facilityId)}"`,
-        `CurrentValue.[user_id] = "${sanitizeLarkFilterValue(userId)}"`,
-        `CurrentValue.[year_month] = "${sanitizeLarkFilterValue(yearMonth)}"`,
+        `CurrentValue.[事業所ID] = "${sanitizeLarkFilterValue(facilityId)}"`,
+        `CurrentValue.[利用者ID] = "${sanitizeLarkFilterValue(userId)}"`,
+        `CurrentValue.[対象年月] = "${sanitizeLarkFilterValue(yearMonth)}"`,
       ].join(' AND '),
     });
-    if (records.length === 0) return null;
-    return toEntity(records[0]!);
+    return records[0] ? toEntity(records[0]) : null;
   }
 
-  /** レコード作成 */
   async create(data: Omit<WorkSchedule, 'id'>): Promise<WorkSchedule> {
     const record = await this.client.create(this.tableId, toFields(data));
     return toEntity(record);
   }
 
-  /** レコード更新 */
   async update(id: string, data: Partial<WorkSchedule>): Promise<WorkSchedule> {
     const record = await this.client.update(this.tableId, id, toFields(data));
     return toEntity(record);
   }
 
-  /** レコード削除 */
   async delete(id: string): Promise<void> {
     await this.client.delete(this.tableId, id);
   }

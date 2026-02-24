@@ -1,6 +1,5 @@
 /**
  * InvoiceRepository
- * Lark Bitable CRUD for invoice records (請求) with status management
  */
 
 import type { Invoice, InvoiceStatus } from '../../types/domain.js';
@@ -8,9 +7,9 @@ import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
 
-// ─── Lark field name constants ──────────────────────────
 const FIELD = {
-  FACILITY_ID: '事業所ID',
+  FACILITY: '事業所',
+  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用)
   YEAR_MONTH: '対象年月',
   BILLING_TARGET: '請求先',
   TOTAL_UNITS: '合計単位数',
@@ -23,19 +22,68 @@ const FIELD = {
   UPDATED_AT: '更新日時',
 } as const;
 
-// ─── Mapper: LarkRecord → Invoice ───────────────────────
+function getLinkId(value: unknown): string {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first != null ? String(first) : '';
+  }
+  return value != null ? String(value) : '';
+}
 
+function toLinkValue(id: string | undefined): string[] | undefined {
+  if (!id) return undefined;
+  return [id];
+}
+
+function toStatus(raw: unknown): InvoiceStatus {
+  const s = String(raw ?? '下書き');
+  const map: Record<string, InvoiceStatus> = {
+    下書き: 'draft',
+    計算済み: 'calculated',
+    CSV生成済み: 'csv_generated',
+    提出済み: 'submitted',
+    受理: 'accepted',
+    返戻: 'rejected',
+    再提出: 'resubmitted',
+    draft: 'draft',
+    calculated: 'calculated',
+    csv_generated: 'csv_generated',
+    submitted: 'submitted',
+    accepted: 'accepted',
+    rejected: 'rejected',
+    resubmitted: 'resubmitted',
+  };
+  return map[s] ?? 'draft';
+}
+
+function toStatusLabel(value: InvoiceStatus): string {
+  const map: Record<InvoiceStatus, string> = {
+    draft: '下書き',
+    calculated: '計算済み',
+    csv_generated: 'CSV生成済み',
+    submitted: '提出済み',
+    accepted: '受理',
+    rejected: '返戻',
+    resubmitted: '再提出',
+  };
+  return map[value];
+}
+
+/**
+ * Link型フィールド ('事業所') からは record_id を取得しドメインIDとして使用。
+ * フィルタ検索にはテキスト型の '事業所ID' フィールドを使用。
+ */
 function toEntity(record: LarkBitableRecord): Invoice {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: String(f[FIELD.FACILITY_ID] ?? ''),
+    facilityId: getLinkId(f[FIELD.FACILITY]),
     yearMonth: String(f[FIELD.YEAR_MONTH] ?? ''),
     billingTarget: 'kokuho_ren',
     totalUnits: Number(f[FIELD.TOTAL_UNITS]) || 0,
     totalAmount: Number(f[FIELD.TOTAL_AMOUNT]) || 0,
     totalCopayment: Number(f[FIELD.TOTAL_COPAYMENT]) || 0,
-    status: (String(f[FIELD.STATUS]) || 'draft') as InvoiceStatus,
+    status: toStatus(f[FIELD.STATUS]),
     csvGeneratedAt: f[FIELD.CSV_GENERATED_AT] != null ? String(f[FIELD.CSV_GENERATED_AT]) : undefined,
     submittedAt: f[FIELD.SUBMITTED_AT] != null ? String(f[FIELD.SUBMITTED_AT]) : undefined,
     createdAt: String(f[FIELD.CREATED_AT] ?? ''),
@@ -43,25 +91,32 @@ function toEntity(record: LarkBitableRecord): Invoice {
   };
 }
 
-// ─── Mapper: Invoice → Lark fields ──────────────────────
-
 function toFields(entity: Partial<Invoice>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
-  if (entity.facilityId !== undefined) fields[FIELD.FACILITY_ID] = entity.facilityId;
+  if (entity.facilityId !== undefined) {
+    fields[FIELD.FACILITY] = toLinkValue(entity.facilityId);
+    fields[FIELD.FACILITY_ID] = entity.facilityId;
+  }
   if (entity.yearMonth !== undefined) fields[FIELD.YEAR_MONTH] = entity.yearMonth;
-  if (entity.billingTarget !== undefined) fields[FIELD.BILLING_TARGET] = entity.billingTarget;
+  if (entity.billingTarget !== undefined) fields[FIELD.BILLING_TARGET] = '国保連';
   if (entity.totalUnits !== undefined) fields[FIELD.TOTAL_UNITS] = entity.totalUnits;
   if (entity.totalAmount !== undefined) fields[FIELD.TOTAL_AMOUNT] = entity.totalAmount;
   if (entity.totalCopayment !== undefined) fields[FIELD.TOTAL_COPAYMENT] = entity.totalCopayment;
-  if (entity.status !== undefined) fields[FIELD.STATUS] = entity.status;
+  if (entity.status !== undefined) fields[FIELD.STATUS] = toStatusLabel(entity.status);
   if (entity.csvGeneratedAt !== undefined) fields[FIELD.CSV_GENERATED_AT] = entity.csvGeneratedAt;
   if (entity.submittedAt !== undefined) fields[FIELD.SUBMITTED_AT] = entity.submittedAt;
   if (entity.createdAt !== undefined) fields[FIELD.CREATED_AT] = entity.createdAt;
   if (entity.updatedAt !== undefined) fields[FIELD.UPDATED_AT] = entity.updatedAt;
+
+  // タイトル列: 請求キーを自動生成
+  if (entity.yearMonth !== undefined || entity.facilityId !== undefined) {
+    const yearMonth = entity.yearMonth ?? '';
+    const facilityId = entity.facilityId ?? '';
+    fields['請求キー'] = `${yearMonth}_${facilityId}`;
+  }
+
   return fields;
 }
-
-// ─── Repository ─────────────────────────────────────────
 
 export class InvoiceRepository {
   constructor(
@@ -69,9 +124,6 @@ export class InvoiceRepository {
     private readonly tableId: string,
   ) {}
 
-  /**
-   * Retrieve all invoice records for a facility.
-   */
   async findAll(facilityId: string): Promise<Invoice[]> {
     const records = await this.client.listAll(this.tableId, {
       filter: `CurrentValue.[${FIELD.FACILITY_ID}]="${sanitizeLarkFilterValue(facilityId)}"`,
@@ -79,21 +131,12 @@ export class InvoiceRepository {
     return records.map(toEntity);
   }
 
-  /**
-   * Retrieve a single invoice record by ID.
-   */
   async findById(id: string, expectedFacilityId: string): Promise<Invoice | null> {
     const record = await this.client.get(this.tableId, id);
     const entity = toEntity(record);
-    if (entity.facilityId !== expectedFacilityId) {
-      return null;
-    }
-    return entity;
+    return entity.facilityId === expectedFacilityId ? entity : null;
   }
 
-  /**
-   * Find invoices for a facility filtered by year-month (e.g. "2026-02").
-   */
   async findByYearMonth(facilityId: string, yearMonth: string): Promise<Invoice[]> {
     const records = await this.client.listAll(this.tableId, {
       filter:
@@ -103,47 +146,30 @@ export class InvoiceRepository {
     return records.map(toEntity);
   }
 
-  /**
-   * Create a new invoice record.
-   */
   async create(data: Omit<Invoice, 'id'>): Promise<Invoice> {
     const record = await this.client.create(this.tableId, toFields(data));
     return toEntity(record);
   }
 
-  /**
-   * Update an existing invoice record.
-   */
   async update(id: string, data: Partial<Invoice>): Promise<Invoice> {
     const record = await this.client.update(this.tableId, id, toFields(data));
     return toEntity(record);
   }
 
-  /**
-   * Transition the invoice to a new status.
-   * Also sets csvGeneratedAt / submittedAt timestamps when appropriate.
-   */
   async updateStatus(id: string, status: InvoiceStatus): Promise<Invoice> {
     const now = new Date().toISOString();
     const fields: Record<string, unknown> = {
-      [FIELD.STATUS]: status,
+      [FIELD.STATUS]: toStatusLabel(status),
       [FIELD.UPDATED_AT]: now,
     };
 
-    if (status === 'csv_generated') {
-      fields[FIELD.CSV_GENERATED_AT] = now;
-    }
-    if (status === 'submitted' || status === 'resubmitted') {
-      fields[FIELD.SUBMITTED_AT] = now;
-    }
+    if (status === 'csv_generated') fields[FIELD.CSV_GENERATED_AT] = now;
+    if (status === 'submitted' || status === 'resubmitted') fields[FIELD.SUBMITTED_AT] = now;
 
     const record = await this.client.update(this.tableId, id, fields);
     return toEntity(record);
   }
 
-  /**
-   * Delete an invoice record by ID.
-   */
   async delete(id: string): Promise<void> {
     await this.client.delete(this.tableId, id);
   }

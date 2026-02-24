@@ -2,7 +2,7 @@
  * LINE Webhook署名検証ミドルウェア
  * HMAC-SHA256を使用してX-Line-Signatureヘッダーを検証する
  */
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 
 export function lineSignatureMiddleware(channelSecret: string) {
@@ -23,7 +23,10 @@ export function lineSignatureMiddleware(channelSecret: string) {
       .update(body)
       .digest('base64');
 
-    if (signature !== expected) {
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+
+    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
       res.status(401).json({ error: 'Invalid signature' });
       return;
     }

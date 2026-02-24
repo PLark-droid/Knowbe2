@@ -1,18 +1,53 @@
 /**
  * FacilityRepository - 事業所マスタ
- * Lark Bitable CRUD with Japanese field mapping
  */
 
-import type {
-  Facility,
-  AreaGrade,
-  RewardStructure,
-} from '../../types/domain.js';
+import type { AreaGrade, Facility, RewardStructure } from '../../types/domain.js';
 import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
 
-// ─── Field Mapping (Japanese ↔ Entity) ──────────────────
+function parseAreaGrade(raw: unknown): AreaGrade {
+  const s = String(raw ?? '1').trim();
+  const n = Number(s.replace(/[^0-9]/g, ''));
+  if (n >= 1 && n <= 7) return n as AreaGrade;
+  return 1;
+}
+
+function parseRewardStructure(raw: unknown): RewardStructure {
+  const s = String(raw ?? 'Ⅰ');
+  const map: Record<string, RewardStructure> = {
+    'Ⅰ': 'I',
+    'Ⅱ': 'II',
+    'Ⅲ': 'III',
+    'Ⅳ': 'IV',
+    'Ⅴ': 'V',
+    'Ⅵ': 'VI',
+    I: 'I',
+    II: 'II',
+    III: 'III',
+    IV: 'IV',
+    V: 'V',
+    VI: 'VI',
+  };
+  return map[s] ?? 'I';
+}
+
+function toAreaGradeLabel(value: AreaGrade): string {
+  return `${value}級地`;
+}
+
+function toRewardLabel(value: RewardStructure): string {
+  const map: Record<RewardStructure, string> = {
+    I: 'Ⅰ',
+    II: 'Ⅱ',
+    III: 'Ⅲ',
+    IV: 'Ⅳ',
+    V: 'Ⅴ',
+    VI: 'Ⅵ',
+  };
+  return map[value];
+}
 
 function toEntity(record: LarkBitableRecord): Facility {
   const f = record.fields as Record<string, unknown>;
@@ -25,10 +60,11 @@ function toEntity(record: LarkBitableRecord): Facility {
     address: String(f['所在地'] ?? ''),
     postalCode: String(f['郵便番号'] ?? ''),
     phone: String(f['電話番号'] ?? ''),
-    fax: f['FAX番号'] ? String(f['FAX番号']) : undefined,
-    areaGrade: Number(f['地域区分'] ?? 1) as AreaGrade,
-    rewardStructure: String(f['報酬体系'] ?? 'I') as RewardStructure,
+    fax: f['FAX番号'] != null ? String(f['FAX番号']) : undefined,
+    areaGrade: parseAreaGrade(f['地域区分']),
+    rewardStructure: parseRewardStructure(f['報酬体系']),
     capacity: Number(f['定員'] ?? 0),
+    averageMonthlyWage: f['平均工賃月額'] != null ? Number(f['平均工賃月額']) : undefined,
     serviceTypeCode: String(f['サービス種別コード'] ?? ''),
     createdAt: String(f['作成日時'] ?? ''),
     updatedAt: String(f['更新日時'] ?? ''),
@@ -45,14 +81,13 @@ function toFields(entity: Partial<Facility>): Record<string, unknown> {
   if (entity.postalCode !== undefined) fields['郵便番号'] = entity.postalCode;
   if (entity.phone !== undefined) fields['電話番号'] = entity.phone;
   if (entity.fax !== undefined) fields['FAX番号'] = entity.fax;
-  if (entity.areaGrade !== undefined) fields['地域区分'] = entity.areaGrade;
-  if (entity.rewardStructure !== undefined) fields['報酬体系'] = entity.rewardStructure;
+  if (entity.areaGrade !== undefined) fields['地域区分'] = toAreaGradeLabel(entity.areaGrade);
+  if (entity.rewardStructure !== undefined) fields['報酬体系'] = toRewardLabel(entity.rewardStructure);
   if (entity.capacity !== undefined) fields['定員'] = entity.capacity;
+  if (entity.averageMonthlyWage !== undefined) fields['平均工賃月額'] = entity.averageMonthlyWage;
   if (entity.serviceTypeCode !== undefined) fields['サービス種別コード'] = entity.serviceTypeCode;
   return fields;
 }
-
-// ─── Repository ─────────────────────────────────────────
 
 export class FacilityRepository {
   constructor(
@@ -60,7 +95,6 @@ export class FacilityRepository {
     private readonly tableId: string,
   ) {}
 
-  /** 事業所IDで全レコード取得 */
   async findAll(facilityId: string): Promise<Facility[]> {
     const records = await this.client.listAll(this.tableId, {
       filter: `CurrentValue.[事業所ID] = "${sanitizeLarkFilterValue(facilityId)}"`,
@@ -68,17 +102,12 @@ export class FacilityRepository {
     return records.map(toEntity);
   }
 
-  /** レコードIDで1件取得 */
   async findById(id: string, expectedFacilityId: string): Promise<Facility | null> {
     const record = await this.client.get(this.tableId, id);
     const entity = toEntity(record);
-    if (entity.facilityId !== expectedFacilityId) {
-      return null;
-    }
-    return entity;
+    return entity.facilityId === expectedFacilityId ? entity : null;
   }
 
-  /** 新規作成 */
   async create(data: Omit<Facility, 'id' | 'createdAt' | 'updatedAt'>): Promise<Facility> {
     const fields = toFields(data);
     fields['作成日時'] = new Date().toISOString();
@@ -87,7 +116,6 @@ export class FacilityRepository {
     return toEntity(record);
   }
 
-  /** 更新 */
   async update(id: string, data: Partial<Facility>): Promise<Facility> {
     const fields = toFields(data);
     fields['更新日時'] = new Date().toISOString();
@@ -95,7 +123,6 @@ export class FacilityRepository {
     return toEntity(record);
   }
 
-  /** 削除 */
   async delete(id: string): Promise<void> {
     await this.client.delete(this.tableId, id);
   }

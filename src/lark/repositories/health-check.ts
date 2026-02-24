@@ -1,6 +1,5 @@
 /**
  * HealthCheckRepository
- * Lark Bitable CRUD for health check records (体調チェック)
  */
 
 import type { HealthCheck } from '../../types/domain.js';
@@ -8,10 +7,11 @@ import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
 
-// ─── Lark field name constants ──────────────────────────
 const FIELD = {
-  FACILITY_ID: '事業所ID',
-  USER_ID: '利用者ID',
+  FACILITY: '事業所',
+  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用)
+  USER: '利用者',
+  USER_ID: '利用者ID', // テキスト型 (フィルタ検索用)
   DATE: '日付',
   SCORE: '体調スコア',
   SLEEP_HOURS: '睡眠時間',
@@ -23,16 +23,49 @@ const FIELD = {
   CREATED_AT: '作成日時',
 } as const;
 
-// ─── Mapper: LarkRecord → HealthCheck ───────────────────
+function getLinkId(value: unknown): string {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return first != null ? String(first) : '';
+  }
+  return value != null ? String(value) : '';
+}
 
+function toLinkValue(id: string | undefined): string[] | undefined {
+  if (!id) return undefined;
+  return [id];
+}
+
+function parseScore(raw: unknown): HealthCheck['score'] {
+  const n = Number(String(raw ?? '3').trim().charAt(0));
+  if (n >= 1 && n <= 5) return n as HealthCheck['score'];
+  return 3;
+}
+
+function toScoreLabel(score: HealthCheck['score']): string {
+  const map: Record<HealthCheck['score'], string> = {
+    1: '1 (とても悪い)',
+    2: '2 (悪い)',
+    3: '3 (普通)',
+    4: '4 (良い)',
+    5: '5 (とても良い)',
+  };
+  return map[score];
+}
+
+/**
+ * Link型フィールド ('事業所', '利用者') からは record_id を取得しドメインIDとして使用。
+ * フィルタ検索にはテキスト型の '事業所ID' / '利用者ID' フィールドを使用
+ * (Link型フィールドは CurrentValue フィルタで直接検索できないため)。
+ */
 function toEntity(record: LarkBitableRecord): HealthCheck {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: String(f[FIELD.FACILITY_ID] ?? ''),
-    userId: String(f[FIELD.USER_ID] ?? ''),
+    facilityId: getLinkId(f[FIELD.FACILITY]),
+    userId: getLinkId(f[FIELD.USER]),
     date: String(f[FIELD.DATE] ?? ''),
-    score: (Number(f[FIELD.SCORE]) || 3) as HealthCheck['score'],
+    score: parseScore(f[FIELD.SCORE]),
     sleepHours: f[FIELD.SLEEP_HOURS] != null ? Number(f[FIELD.SLEEP_HOURS]) : undefined,
     meals: {
       breakfast: Boolean(f[FIELD.BREAKFAST]),
@@ -45,14 +78,18 @@ function toEntity(record: LarkBitableRecord): HealthCheck {
   };
 }
 
-// ─── Mapper: HealthCheck → Lark fields ──────────────────
-
 function toFields(entity: Partial<HealthCheck>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
-  if (entity.facilityId !== undefined) fields[FIELD.FACILITY_ID] = entity.facilityId;
-  if (entity.userId !== undefined) fields[FIELD.USER_ID] = entity.userId;
+  if (entity.facilityId !== undefined) {
+    fields[FIELD.FACILITY] = toLinkValue(entity.facilityId);
+    fields[FIELD.FACILITY_ID] = entity.facilityId; // テキスト型 (フィルタ検索用)
+  }
+  if (entity.userId !== undefined) {
+    fields[FIELD.USER] = toLinkValue(entity.userId);
+    fields[FIELD.USER_ID] = entity.userId; // テキスト型 (フィルタ検索用)
+  }
   if (entity.date !== undefined) fields[FIELD.DATE] = entity.date;
-  if (entity.score !== undefined) fields[FIELD.SCORE] = entity.score;
+  if (entity.score !== undefined) fields[FIELD.SCORE] = toScoreLabel(entity.score);
   if (entity.sleepHours !== undefined) fields[FIELD.SLEEP_HOURS] = entity.sleepHours;
   if (entity.meals !== undefined) {
     fields[FIELD.BREAKFAST] = entity.meals.breakfast;
@@ -62,10 +99,16 @@ function toFields(entity: Partial<HealthCheck>): Record<string, unknown> {
   if (entity.mood !== undefined) fields[FIELD.MOOD] = entity.mood;
   if (entity.note !== undefined) fields[FIELD.NOTE] = entity.note;
   if (entity.createdAt !== undefined) fields[FIELD.CREATED_AT] = entity.createdAt;
+
+  // タイトル列: 体調キーを自動生成
+  if (entity.date !== undefined || entity.userId !== undefined) {
+    const date = entity.date ?? '';
+    const userId = entity.userId ?? '';
+    fields['体調キー'] = `${date}_${userId}`;
+  }
+
   return fields;
 }
-
-// ─── Repository ─────────────────────────────────────────
 
 export class HealthCheckRepository {
   constructor(
@@ -73,9 +116,6 @@ export class HealthCheckRepository {
     private readonly tableId: string,
   ) {}
 
-  /**
-   * Retrieve all health check records for a facility.
-   */
   async findAll(facilityId: string): Promise<HealthCheck[]> {
     const records = await this.client.listAll(this.tableId, {
       filter: `CurrentValue.[${FIELD.FACILITY_ID}]="${sanitizeLarkFilterValue(facilityId)}"`,
@@ -83,37 +123,22 @@ export class HealthCheckRepository {
     return records.map(toEntity);
   }
 
-  /**
-   * Retrieve a single health check record by ID.
-   */
   async findById(id: string, expectedFacilityId: string): Promise<HealthCheck | null> {
     const record = await this.client.get(this.tableId, id);
     const entity = toEntity(record);
-    if (entity.facilityId !== expectedFacilityId) {
-      return null;
-    }
-    return entity;
+    return entity.facilityId === expectedFacilityId ? entity : null;
   }
 
-  /**
-   * Create a new health check record.
-   */
   async create(data: Omit<HealthCheck, 'id'>): Promise<HealthCheck> {
     const record = await this.client.create(this.tableId, toFields(data));
     return toEntity(record);
   }
 
-  /**
-   * Update an existing health check record.
-   */
   async update(id: string, data: Partial<HealthCheck>): Promise<HealthCheck> {
     const record = await this.client.update(this.tableId, id, toFields(data));
     return toEntity(record);
   }
 
-  /**
-   * Delete a health check record by ID.
-   */
   async delete(id: string): Promise<void> {
     await this.client.delete(this.tableId, id);
   }
