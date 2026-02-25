@@ -1,17 +1,22 @@
 /**
  * HealthCheckRepository
+ *
+ * Link型フィールド ('事業所', '利用者') には Lark record_id を書き込み、
+ * ドメインモデルの facilityId / userId は テキスト型フィールドから読み取る。
  */
 
 import type { HealthCheck } from '../../types/domain.js';
 import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
+import { toLinkValue } from '../link-helpers.js';
+import type { LinkResolver } from '../link-resolver.js';
 
 const FIELD = {
   FACILITY: '事業所',
-  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用)
+  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用 + 業務ID読み取り)
   USER: '利用者',
-  USER_ID: '利用者ID', // テキスト型 (フィルタ検索用)
+  USER_ID: '利用者ID', // テキスト型 (フィルタ検索用 + 業務ID読み取り)
   DATE: '日付',
   SCORE: '体調スコア',
   SLEEP_HOURS: '睡眠時間',
@@ -22,19 +27,6 @@ const FIELD = {
   NOTE: '備考',
   CREATED_AT: '作成日時',
 } as const;
-
-function getLinkId(value: unknown): string {
-  if (Array.isArray(value)) {
-    const first = value[0];
-    return first != null ? String(first) : '';
-  }
-  return value != null ? String(value) : '';
-}
-
-function toLinkValue(id: string | undefined): string[] | undefined {
-  if (!id) return undefined;
-  return [id];
-}
 
 function parseScore(raw: unknown): HealthCheck['score'] {
   const n = Number(String(raw ?? '3').trim().charAt(0));
@@ -54,16 +46,15 @@ function toScoreLabel(score: HealthCheck['score']): string {
 }
 
 /**
- * Link型フィールド ('事業所', '利用者') からは record_id を取得しドメインIDとして使用。
- * フィルタ検索にはテキスト型の '事業所ID' / '利用者ID' フィールドを使用
- * (Link型フィールドは CurrentValue フィルタで直接検索できないため)。
+ * Lark レコード -> ドメインエンティティ変換。
+ * 業務IDはテキスト型フィールドから読み取る。
  */
 function toEntity(record: LarkBitableRecord): HealthCheck {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: getLinkId(f[FIELD.FACILITY]),
-    userId: getLinkId(f[FIELD.USER]),
+    facilityId: String(f[FIELD.FACILITY_ID] ?? ''),
+    userId: String(f[FIELD.USER_ID] ?? ''),
     date: String(f[FIELD.DATE] ?? ''),
     score: parseScore(f[FIELD.SCORE]),
     sleepHours: f[FIELD.SLEEP_HOURS] != null ? Number(f[FIELD.SLEEP_HOURS]) : undefined,
@@ -78,15 +69,13 @@ function toEntity(record: LarkBitableRecord): HealthCheck {
   };
 }
 
-function toFields(entity: Partial<HealthCheck>): Record<string, unknown> {
+function toBaseFields(entity: Partial<HealthCheck>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (entity.facilityId !== undefined) {
-    fields[FIELD.FACILITY] = toLinkValue(entity.facilityId);
-    fields[FIELD.FACILITY_ID] = entity.facilityId; // テキスト型 (フィルタ検索用)
+    fields[FIELD.FACILITY_ID] = entity.facilityId;
   }
   if (entity.userId !== undefined) {
-    fields[FIELD.USER] = toLinkValue(entity.userId);
-    fields[FIELD.USER_ID] = entity.userId; // テキスト型 (フィルタ検索用)
+    fields[FIELD.USER_ID] = entity.userId;
   }
   if (entity.date !== undefined) fields[FIELD.DATE] = entity.date;
   if (entity.score !== undefined) fields[FIELD.SCORE] = toScoreLabel(entity.score);
@@ -114,7 +103,29 @@ export class HealthCheckRepository {
   constructor(
     private readonly client: BitableClient,
     private readonly tableId: string,
+    private readonly linkResolver?: LinkResolver,
   ) {}
+
+  /** Link 型フィールドの record_id を解決してフィールドに追加する */
+  private async resolveLinks(
+    fields: Record<string, unknown>,
+    entity: Partial<HealthCheck>,
+  ): Promise<void> {
+    if (!this.linkResolver) return;
+
+    if (entity.facilityId !== undefined) {
+      const recordId = await this.linkResolver.resolve('facility', entity.facilityId);
+      if (recordId) {
+        fields[FIELD.FACILITY] = toLinkValue(recordId);
+      }
+    }
+    if (entity.userId !== undefined) {
+      const recordId = await this.linkResolver.resolve('user', entity.userId);
+      if (recordId) {
+        fields[FIELD.USER] = toLinkValue(recordId);
+      }
+    }
+  }
 
   async findAll(facilityId: string): Promise<HealthCheck[]> {
     const records = await this.client.listAll(this.tableId, {
@@ -130,12 +141,16 @@ export class HealthCheckRepository {
   }
 
   async create(data: Omit<HealthCheck, 'id'>): Promise<HealthCheck> {
-    const record = await this.client.create(this.tableId, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.create(this.tableId, fields);
     return toEntity(record);
   }
 
   async update(id: string, data: Partial<HealthCheck>): Promise<HealthCheck> {
-    const record = await this.client.update(this.tableId, id, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.update(this.tableId, id, fields);
     return toEntity(record);
   }
 

@@ -1,11 +1,17 @@
 /**
  * AttendanceRepository - 勤怠記録
+ *
+ * Link型フィールド ('事業所', '利用者') には Lark record_id を書き込み、
+ * ドメインモデルの facilityId / userId は テキスト型フィールドから読み取る。
+ * フィルタ検索にもテキスト型フィールドを使用する。
  */
 
 import type { Attendance, AttendanceType, PickupType } from '../../types/domain.js';
 import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
+import { toLinkValue } from '../link-helpers.js';
+import type { LinkResolver } from '../link-resolver.js';
 
 function timeToMinutes(time: string): number {
   const [hStr, mStr] = time.split(':');
@@ -23,19 +29,6 @@ function calculateActualMinutes(
   if (Number.isNaN(inMin) || Number.isNaN(outMin)) return undefined;
   const diff = outMin - inMin - breakMinutes;
   return diff > 0 ? diff : 0;
-}
-
-function getLinkId(value: unknown): string {
-  if (Array.isArray(value)) {
-    const first = value[0];
-    return first != null ? String(first) : '';
-  }
-  return value != null ? String(value) : '';
-}
-
-function toLinkValue(id: string | undefined): string[] | undefined {
-  if (!id) return undefined;
-  return [id];
 }
 
 function toAttendanceType(raw: unknown): AttendanceType {
@@ -92,17 +85,16 @@ function toPickupTypeLabel(value: PickupType): string {
 }
 
 /**
- * Link型フィールド ('事業所', '利用者') からは record_id を取得しドメインIDとして使用。
- * フィルタ検索にはテキスト型の '事業所ID' / '利用者ID' フィールドを使用
- * (Link型フィールドは CurrentValue フィルタで直接検索できないため)。
- * toFields では Link値とテキストID両方を書き込み、データ整合性を保つ。
+ * Lark レコード -> ドメインエンティティ変換。
+ * 業務IDはテキスト型フィールド '事業所ID' / '利用者ID' から読み取る。
+ * (Link 型フィールド '事業所' / '利用者' は record_id が入っているためドメインIDとして使わない)
  */
 function toEntity(record: LarkBitableRecord): Attendance {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: getLinkId(f['事業所']),
-    userId: getLinkId(f['利用者']),
+    facilityId: String(f['事業所ID'] ?? ''),
+    userId: String(f['利用者ID'] ?? ''),
     date: String(f['日付'] ?? ''),
     clockIn: f['出勤時刻'] ? String(f['出勤時刻']) : undefined,
     clockOut: f['退勤時刻'] ? String(f['退勤時刻']) : undefined,
@@ -117,15 +109,17 @@ function toEntity(record: LarkBitableRecord): Attendance {
   };
 }
 
-function toFields(entity: Partial<Attendance>): Record<string, unknown> {
+/**
+ * ドメインエンティティ -> Lark フィールド変換 (テキスト型フィールドのみ)。
+ * Link 型フィールドへの書き込みは toFieldsWithLinks() が担う。
+ */
+function toBaseFields(entity: Partial<Attendance>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (entity.facilityId !== undefined) {
-    fields['事業所'] = toLinkValue(entity.facilityId);
-    fields['事業所ID'] = entity.facilityId; // テキスト型 (フィルタ検索用)
+    fields['事業所ID'] = entity.facilityId;
   }
   if (entity.userId !== undefined) {
-    fields['利用者'] = toLinkValue(entity.userId);
-    fields['利用者ID'] = entity.userId; // テキスト型 (フィルタ検索用)
+    fields['利用者ID'] = entity.userId;
   }
   if (entity.date !== undefined) fields['日付'] = entity.date;
   if (entity.clockIn !== undefined) fields['出勤時刻'] = entity.clockIn;
@@ -137,7 +131,7 @@ function toFields(entity: Partial<Attendance>): Record<string, unknown> {
   if (entity.mealProvided !== undefined) fields['食事提供'] = entity.mealProvided;
   if (entity.note !== undefined) fields['備考'] = entity.note;
 
-  // タイトル列: 勤怠キーを自動生成 (日付_利用者表示名 or 日付_userId)
+  // タイトル列: 勤怠キーを自動生成 (日付_利用者ID)
   if (entity.date !== undefined || entity.userId !== undefined) {
     const date = entity.date ?? '';
     const userKey = entity.userId ?? '';
@@ -151,7 +145,29 @@ export class AttendanceRepository {
   constructor(
     private readonly client: BitableClient,
     private readonly tableId: string,
+    private readonly linkResolver?: LinkResolver,
   ) {}
+
+  /** Link 型フィールドの record_id を解決してフィールドに追加する */
+  private async resolveLinks(
+    fields: Record<string, unknown>,
+    entity: Partial<Attendance>,
+  ): Promise<void> {
+    if (!this.linkResolver) return;
+
+    if (entity.facilityId !== undefined) {
+      const recordId = await this.linkResolver.resolve('facility', entity.facilityId);
+      if (recordId) {
+        fields['事業所'] = toLinkValue(recordId);
+      }
+    }
+    if (entity.userId !== undefined) {
+      const recordId = await this.linkResolver.resolve('user', entity.userId);
+      if (recordId) {
+        fields['利用者'] = toLinkValue(recordId);
+      }
+    }
+  }
 
   async findAll(facilityId: string): Promise<Attendance[]> {
     const records = await this.client.listAll(this.tableId, {
@@ -186,9 +202,10 @@ export class AttendanceRepository {
     }
 
     const actualMinutes = calculateActualMinutes(data.clockIn, data.clockOut, data.breakMinutes);
-    const fields = toFields({ ...data, actualMinutes });
+    const fields = toBaseFields({ ...data, actualMinutes });
     fields['作成日時'] = new Date().toISOString();
     fields['更新日時'] = new Date().toISOString();
+    await this.resolveLinks(fields, data);
     const record = await this.client.create(this.tableId, fields);
     return toEntity(record);
   }
@@ -207,8 +224,9 @@ export class AttendanceRepository {
       };
     }
 
-    const fields = toFields(data);
+    const fields = toBaseFields(data);
     fields['更新日時'] = new Date().toISOString();
+    await this.resolveLinks(fields, data);
     const record = await this.client.update(this.tableId, id, fields);
     return toEntity(record);
   }

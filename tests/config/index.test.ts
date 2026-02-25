@@ -16,6 +16,7 @@ describe('Config Manager', () => {
     delete process.env['LARK_APP_ID'];
     delete process.env['LARK_APP_SECRET'];
     delete process.env['LARK_BASE_APP_TOKEN'];
+    delete process.env['LARK_VERIFICATION_TOKEN'];
     delete process.env['GITHUB_TOKEN'];
     delete process.env['PORT'];
     delete process.env['REPOSITORY'];
@@ -39,6 +40,7 @@ describe('Config Manager', () => {
       expect(config.lark.appId).toBe('');
       expect(config.lark.appSecret).toBe('');
       expect(config.lark.baseAppToken).toBe('');
+      expect(config.lark.verificationToken).toBe('');
       expect(config.github.token).toBe('');
     });
 
@@ -131,6 +133,7 @@ describe('Config Manager', () => {
         const configError = error as InstanceType<typeof ConfigError>;
         expect(configError.missingVars).toContain('LINE_CHANNEL_ACCESS_TOKEN');
         expect(configError.missingVars).toContain('LARK_APP_ID');
+        expect(configError.missingVars).toContain('LARK_VERIFICATION_TOKEN');
         expect(configError.missingVars).toContain('GITHUB_TOKEN');
       }
     });
@@ -142,13 +145,68 @@ describe('Config Manager', () => {
       process.env['LARK_APP_ID'] = 'app-id';
       process.env['LARK_APP_SECRET'] = 'app-secret';
       process.env['LARK_BASE_APP_TOKEN'] = 'base-token';
+      process.env['LARK_VERIFICATION_TOKEN'] = 'verify-token';
       process.env['GITHUB_TOKEN'] = 'gh-token';
       resetConfig();
 
       const config = loadConfig({ required: true });
       expect(config.line.channelAccessToken).toBe('token');
       expect(config.lark.appId).toBe('app-id');
+      expect(config.lark.verificationToken).toBe('verify-token');
       expect(config.github.token).toBe('gh-token');
+    });
+  });
+
+  // ─── Required flag + cache interaction (Issue #20) ──────
+
+  describe('required flag + cache interaction', () => {
+    it('should cache result from required=false and reuse for required=true call', () => {
+      // First call: required=false succeeds (no env vars needed)
+      const config1 = loadConfig({ required: false });
+      expect(config1.line.channelAccessToken).toBe('');
+
+      // Second call: required=true should return the SAME cached object
+      // (cache ignores the required flag on subsequent calls)
+      const config2 = loadConfig({ required: true });
+      expect(config1).toBe(config2);
+    });
+
+    it('after resetConfig, required=true should throw for missing vars', () => {
+      // Pre-populate cache
+      loadConfig({ required: false });
+
+      // Reset and try with required=true
+      resetConfig();
+      expect(() => loadConfig({ required: true })).toThrow(ConfigError);
+    });
+
+    it('after resetConfig, required=true should succeed when all vars are set', () => {
+      process.env['LINE_CHANNEL_ACCESS_TOKEN'] = 'tok-1';
+      process.env['LINE_CHANNEL_SECRET'] = 'sec-1';
+      process.env['LINE_LIFF_ID'] = 'liff-1';
+      process.env['LARK_APP_ID'] = 'app-1';
+      process.env['LARK_APP_SECRET'] = 'secret-1';
+      process.env['LARK_BASE_APP_TOKEN'] = 'base-1';
+      process.env['LARK_VERIFICATION_TOKEN'] = 'verify-1';
+      process.env['GITHUB_TOKEN'] = 'gh-1';
+      resetConfig();
+
+      const config = loadConfig({ required: true });
+      expect(config.line.channelAccessToken).toBe('tok-1');
+      expect(config.lark.verificationToken).toBe('verify-1');
+
+      // Reset again and change an env var - cache should still hold old value
+      process.env['LINE_CHANNEL_ACCESS_TOKEN'] = 'tok-2';
+      const config2 = loadConfig({ required: true });
+      expect(config2.line.channelAccessToken).toBe('tok-1'); // cached
+    });
+
+    it('loadConfig without options should default based on NODE_ENV', () => {
+      process.env['NODE_ENV'] = 'test';
+      resetConfig();
+
+      // test env -> required defaults to false
+      expect(() => loadConfig()).not.toThrow();
     });
   });
 

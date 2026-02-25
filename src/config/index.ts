@@ -15,6 +15,7 @@ export interface AppConfig {
     appId: string;
     appSecret: string;
     baseAppToken: string;
+    verificationToken: string;
   };
   /** サーバー設定 */
   server: {
@@ -73,6 +74,7 @@ export function loadConfig(options?: { required?: boolean }): AppConfig {
       appId: getEnv('LARK_APP_ID'),
       appSecret: getEnv('LARK_APP_SECRET'),
       baseAppToken: getEnv('LARK_BASE_APP_TOKEN'),
+      verificationToken: getEnv('LARK_VERIFICATION_TOKEN'),
     },
     server: {
       port: parseInt(process.env['PORT'] ?? '3000', 10),

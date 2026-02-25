@@ -1,38 +1,30 @@
 /**
  * SupportRecordRepository
+ *
+ * Link型フィールド ('事業所', '利用者', '担当職員') には Lark record_id を書き込み、
+ * ドメインモデルの facilityId / userId / staffId は テキスト型フィールドから読み取る。
  */
 
 import type { SupportRecord, SupportType } from '../../types/domain.js';
 import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
+import { toLinkValue } from '../link-helpers.js';
+import type { LinkResolver } from '../link-resolver.js';
 
 const FIELD = {
   FACILITY: '事業所',
-  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用)
+  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用 + 業務ID読み取り)
   USER: '利用者',
-  USER_ID: '利用者ID', // テキスト型 (フィルタ検索用)
+  USER_ID: '利用者ID', // テキスト型 (フィルタ検索用 + 業務ID読み取り)
   STAFF: '担当職員',
-  STAFF_ID: '担当職員ID', // テキスト型 (フィルタ検索用)
+  STAFF_ID: '担当職員ID', // テキスト型 (フィルタ検索用 + 業務ID読み取り)
   DATE: '日付',
   CONTENT: '支援内容',
   SUPPORT_TYPE: '支援区分',
   CREATED_AT: '作成日時',
   UPDATED_AT: '更新日時',
 } as const;
-
-function getLinkId(value: unknown): string {
-  if (Array.isArray(value)) {
-    const first = value[0];
-    return first != null ? String(first) : '';
-  }
-  return value != null ? String(value) : '';
-}
-
-function toLinkValue(id: string | undefined): string[] | undefined {
-  if (!id) return undefined;
-  return [id];
-}
 
 function toSupportType(raw: unknown): SupportType {
   const s = String(raw ?? '日常生活支援');
@@ -63,16 +55,16 @@ function toSupportTypeLabel(value: SupportType): string {
 }
 
 /**
- * Link型フィールド ('事業所', '利用者', '担当職員') からは record_id を取得しドメインIDとして使用。
- * フィルタ検索にはテキスト型の '事業所ID' 等のフィールドを使用。
+ * Lark レコード -> ドメインエンティティ変換。
+ * 業務IDはテキスト型フィールドから読み取る。
  */
 function toEntity(record: LarkBitableRecord): SupportRecord {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: getLinkId(f[FIELD.FACILITY]),
-    userId: getLinkId(f[FIELD.USER]),
-    staffId: getLinkId(f[FIELD.STAFF]),
+    facilityId: String(f[FIELD.FACILITY_ID] ?? ''),
+    userId: String(f[FIELD.USER_ID] ?? ''),
+    staffId: String(f[FIELD.STAFF_ID] ?? ''),
     date: String(f[FIELD.DATE] ?? ''),
     content: String(f[FIELD.CONTENT] ?? ''),
     supportType: toSupportType(f[FIELD.SUPPORT_TYPE]),
@@ -81,18 +73,15 @@ function toEntity(record: LarkBitableRecord): SupportRecord {
   };
 }
 
-function toFields(entity: Partial<SupportRecord>): Record<string, unknown> {
+function toBaseFields(entity: Partial<SupportRecord>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (entity.facilityId !== undefined) {
-    fields[FIELD.FACILITY] = toLinkValue(entity.facilityId);
     fields[FIELD.FACILITY_ID] = entity.facilityId;
   }
   if (entity.userId !== undefined) {
-    fields[FIELD.USER] = toLinkValue(entity.userId);
     fields[FIELD.USER_ID] = entity.userId;
   }
   if (entity.staffId !== undefined) {
-    fields[FIELD.STAFF] = toLinkValue(entity.staffId);
     fields[FIELD.STAFF_ID] = entity.staffId;
   }
   if (entity.date !== undefined) fields[FIELD.DATE] = entity.date;
@@ -115,7 +104,35 @@ export class SupportRecordRepository {
   constructor(
     private readonly client: BitableClient,
     private readonly tableId: string,
+    private readonly linkResolver?: LinkResolver,
   ) {}
+
+  /** Link 型フィールドの record_id を解決してフィールドに追加する */
+  private async resolveLinks(
+    fields: Record<string, unknown>,
+    entity: Partial<SupportRecord>,
+  ): Promise<void> {
+    if (!this.linkResolver) return;
+
+    if (entity.facilityId !== undefined) {
+      const recordId = await this.linkResolver.resolve('facility', entity.facilityId);
+      if (recordId) {
+        fields[FIELD.FACILITY] = toLinkValue(recordId);
+      }
+    }
+    if (entity.userId !== undefined) {
+      const recordId = await this.linkResolver.resolve('user', entity.userId);
+      if (recordId) {
+        fields[FIELD.USER] = toLinkValue(recordId);
+      }
+    }
+    if (entity.staffId !== undefined) {
+      const recordId = await this.linkResolver.resolve('staff', entity.staffId);
+      if (recordId) {
+        fields[FIELD.STAFF] = toLinkValue(recordId);
+      }
+    }
+  }
 
   async findAll(facilityId: string): Promise<SupportRecord[]> {
     const records = await this.client.listAll(this.tableId, {
@@ -131,12 +148,16 @@ export class SupportRecordRepository {
   }
 
   async create(data: Omit<SupportRecord, 'id'>): Promise<SupportRecord> {
-    const record = await this.client.create(this.tableId, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.create(this.tableId, fields);
     return toEntity(record);
   }
 
   async update(id: string, data: Partial<SupportRecord>): Promise<SupportRecord> {
-    const record = await this.client.update(this.tableId, id, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.update(this.tableId, id, fields);
     return toEntity(record);
   }
 

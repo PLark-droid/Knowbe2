@@ -288,4 +288,124 @@ describe('createLarkWebhookHandler', () => {
       expect(res.body).toEqual({ msg: 'ok' });
     });
   });
+
+  describe('updated branch routing (Issue #20)', () => {
+    it('should call onRecordUpdated but NOT onRecordCreated for bitable.record.updated', async () => {
+      const onRecordCreated = vi.fn().mockResolvedValue(undefined);
+      const onRecordUpdated = vi.fn().mockResolvedValue(undefined);
+      const handler = createLarkWebhookHandler({ onRecordCreated, onRecordUpdated });
+
+      const req = createMockRequest({
+        schema: '2.0',
+        header: {
+          event_id: 'evt_upd_001',
+          event_type: 'bitable.record.updated',
+          create_time: '1234567890',
+          token: 'tok',
+          app_id: 'cli_xxx',
+          tenant_key: 'tenant_xxx',
+        },
+        event: {
+          table_id: 'tbl_upd',
+          record_id: 'rec_upd_001',
+          fields: { status: 'modified' },
+        },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res as unknown as Response);
+
+      expect(onRecordCreated).not.toHaveBeenCalled();
+      expect(onRecordUpdated).toHaveBeenCalledWith('tbl_upd', 'rec_upd_001', { status: 'modified' });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('should call onRecordUpdated but NOT onRecordCreated for drive.file.bitable_record_changed_v1', async () => {
+      const onRecordCreated = vi.fn().mockResolvedValue(undefined);
+      const onRecordUpdated = vi.fn().mockResolvedValue(undefined);
+      const handler = createLarkWebhookHandler({ onRecordCreated, onRecordUpdated });
+
+      const req = createMockRequest({
+        schema: '2.0',
+        header: {
+          event_id: 'evt_chg_001',
+          event_type: 'drive.file.bitable_record_changed_v1',
+          create_time: '1234567890',
+          token: 'tok',
+          app_id: 'cli_xxx',
+          tenant_key: 'tenant_xxx',
+        },
+        event: {
+          table_id: 'tbl_chg',
+          record_id: 'rec_chg_001',
+          fields: { name: 'changed' },
+        },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res as unknown as Response);
+
+      expect(onRecordCreated).not.toHaveBeenCalled();
+      expect(onRecordUpdated).toHaveBeenCalledWith('tbl_chg', 'rec_chg_001', { name: 'changed' });
+    });
+
+    it('should handle bitable.record.updated when only onRecordCreated is defined', async () => {
+      const onRecordCreated = vi.fn().mockResolvedValue(undefined);
+      const handler = createLarkWebhookHandler({ onRecordCreated });
+
+      const req = createMockRequest({
+        schema: '2.0',
+        header: {
+          event_id: 'evt_upd_nohandler',
+          event_type: 'bitable.record.updated',
+          create_time: '1234567890',
+          token: 'tok',
+          app_id: 'cli_xxx',
+          tenant_key: 'tenant_xxx',
+        },
+        event: {
+          table_id: 'tbl_upd',
+          record_id: 'rec_upd_no',
+          fields: {},
+        },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res as unknown as Response);
+
+      expect(onRecordCreated).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ msg: 'ok' });
+    });
+
+    it('should return 500 when onRecordUpdated throws', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const onRecordUpdated = vi.fn().mockRejectedValue(new Error('Update handler failed'));
+      const handler = createLarkWebhookHandler({ onRecordUpdated });
+
+      const req = createMockRequest({
+        schema: '2.0',
+        header: {
+          event_id: 'evt_upd_err',
+          event_type: 'bitable.record.updated',
+          create_time: '1234567890',
+          token: 'tok',
+          app_id: 'cli_xxx',
+          tenant_key: 'tenant_xxx',
+        },
+        event: {
+          table_id: 'tbl_err',
+          record_id: 'rec_err',
+          fields: { x: 1 },
+        },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res as unknown as Response);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Lark webhook processing failed' });
+      consoleSpy.mockRestore();
+    });
+  });
 });

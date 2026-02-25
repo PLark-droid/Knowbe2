@@ -8,6 +8,7 @@ import { createServer } from './server.js';
 import { createLineWebhookHandler } from './handlers/line.js';
 import { createLarkWebhookHandler } from './handlers/lark.js';
 import { createAttendanceHandler } from './handlers/line-attendance.js';
+import { validateWebhookSecrets } from './validate-secrets.js';
 import { LarkAuth } from '../lark/auth.js';
 import { BitableClient } from '../lark/client.js';
 import { UserRepository } from '../lark/repositories/user.js';
@@ -31,29 +32,29 @@ const LARK_TABLE_HEALTH_CHECK = process.env['LARK_TABLE_HEALTH_CHECK'] ?? '';
 const NODE_ENV = process.env['NODE_ENV'] ?? 'development';
 const isProduction = NODE_ENV === 'production';
 
-// LINE_CHANNEL_SECRET: 本番では必須（空キーで署名生成できてしまうため）
-if (!LINE_CHANNEL_SECRET) {
-  if (isProduction) {
-    console.error('LINE_CHANNEL_SECRET が未設定です。本番環境では必須です。');
-    process.exit(1);
-  }
-  console.warn('⚠️  LINE_CHANNEL_SECRET が未設定です。LINE Webhookの署名検証が機能しません。');
+// ─── Webhook シークレット検証 (fail-fast) ────────────────────
+// セキュリティ: 空のシークレットではHMAC署名/トークン検証が実質無効化される。
+// 本番環境ではWebhook認証に必要な全シークレットを必須とし、未設定時は即座に終了する。
+
+const { missing, warnings } = validateWebhookSecrets({
+  lineChannelSecret: LINE_CHANNEL_SECRET,
+  larkVerificationToken: LARK_VERIFICATION_TOKEN,
+  larkAppId: LARK_APP_ID,
+  larkAppSecret: LARK_APP_SECRET,
+  larkBaseAppToken: LARK_BASE_APP_TOKEN,
+  isProduction,
+});
+
+if (missing.length > 0) {
+  console.error(
+    `FATAL: 必須環境変数が未設定です: ${missing.join(', ')}\n` +
+    '本番環境ではWebhook認証に必要な全シークレットを設定してください。',
+  );
+  process.exit(1);
 }
 
-// LARK_VERIFICATION_TOKEN: 現時点では warn 止まり（将来の Lark Webhook 署名検証に備える）
-if (!LARK_VERIFICATION_TOKEN) {
-  if (isProduction) {
-    console.warn('⚠️  LARK_VERIFICATION_TOKEN が未設定です。本番環境では設定を推奨します。');
-  }
-}
-
-// Lark Base 接続: 本番では必須
-if (!LARK_APP_ID || !LARK_APP_SECRET || !LARK_BASE_APP_TOKEN) {
-  if (isProduction) {
-    console.error('LARK_APP_ID / LARK_APP_SECRET / LARK_BASE_APP_TOKEN が未設定です。');
-    process.exit(1);
-  }
-  console.warn('⚠️  Lark Base 接続情報が未設定です。勤怠・体調チェック機能が動作しません。');
+for (const w of warnings) {
+  console.warn(`WARNING: ${w}`);
 }
 
 // ─── Lark Base クライアント初期化 ────────────────────────────

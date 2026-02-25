@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { BitableClient } from '../../src/lark/client.js';
+import { BitableClient, LarkApiError, isRetryableApiError } from '../../src/lark/client.js';
 import type { LarkAuth } from '../../src/lark/auth.js';
 
 /** Minimal mock for LarkAuth */
@@ -249,5 +249,84 @@ describe('BitableClient', () => {
       expect(result.record_id).toBe('rec1');
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
+  });
+
+  describe('LarkApiError structured properties', () => {
+    it('retryable error should throw LarkApiError with structured fields after retries exhausted', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+        Promise.resolve(larkError(1254007, 'Record locked')),
+      );
+
+      try {
+        await client.get('tbl1', 'rec1');
+        expect.fail('should have thrown');
+      } catch (err: unknown) {
+        // p-retry wraps the last error; check the underlying LarkApiError
+        const apiErr = err instanceof LarkApiError
+          ? err
+          : (err as { cause?: LarkApiError }).cause;
+
+        expect(apiErr).toBeInstanceOf(LarkApiError);
+        expect(apiErr!.larkCode).toBe(1254007);
+        expect(apiErr!.larkMsg).toBe('Record locked');
+        expect(apiErr!.path).toContain('/apps/app123/tables/tbl1/records/rec1');
+        expect(apiErr!.retryable).toBe(true);
+        expect(apiErr!.name).toBe('LarkApiError');
+      }
+    }, 15000);
+
+    it('non-retryable error should throw LarkApiError directly', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+        Promise.resolve(larkError(1254001, 'Permission denied')),
+      );
+
+      try {
+        await client.get('tbl1', 'rec1');
+        expect.fail('should have thrown');
+      } catch (err: unknown) {
+        // p-retry extracts AbortError.originalError and re-throws it,
+        // so we receive the LarkApiError directly
+        expect(err).toBeInstanceOf(LarkApiError);
+        const apiErr = err as LarkApiError;
+        expect(apiErr.larkCode).toBe(1254001);
+        expect(apiErr.larkMsg).toBe('Permission denied');
+        expect(apiErr.path).toContain('/apps/app123/tables/tbl1/records/rec1');
+        expect(apiErr.retryable).toBe(false);
+        expect(apiErr.name).toBe('LarkApiError');
+      }
+    });
+
+    it('LarkApiError message format should include path, code, and msg', () => {
+      const err = new LarkApiError(1254099, 'Test error', '/test/path', false);
+      expect(err.message).toBe('Lark API error [/test/path]: code=1254099 msg=Test error');
+      expect(err.name).toBe('LarkApiError');
+    });
+  });
+});
+
+describe('isRetryableApiError', () => {
+  it('should return true for record locked (1254007)', () => {
+    expect(isRetryableApiError(1254007)).toBe(true);
+  });
+
+  it('should return true for table locked (1254008)', () => {
+    expect(isRetryableApiError(1254008)).toBe(true);
+  });
+
+  it('should return true for concurrent writes (1254043)', () => {
+    expect(isRetryableApiError(1254043)).toBe(true);
+  });
+
+  it('should return true for server internal error range (99991000-99991999)', () => {
+    expect(isRetryableApiError(99991000)).toBe(true);
+    expect(isRetryableApiError(99991500)).toBe(true);
+    expect(isRetryableApiError(99991999)).toBe(true);
+  });
+
+  it('should return false for codes outside retryable ranges', () => {
+    expect(isRetryableApiError(0)).toBe(false);
+    expect(isRetryableApiError(1254001)).toBe(false);
+    expect(isRetryableApiError(99990999)).toBe(false);
+    expect(isRetryableApiError(99992000)).toBe(false);
   });
 });

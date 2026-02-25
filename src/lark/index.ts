@@ -3,8 +3,11 @@
  */
 
 export { LarkAuth } from './auth.js';
-export { BitableClient } from './client.js';
+export { BitableClient, LarkApiError, isRetryableApiError } from './client.js';
 export type { BitableClientConfig } from './client.js';
+export { LinkResolver, NullLinkResolver } from './link-resolver.js';
+export type { LinkResolverConfig, LinkTargetType } from './link-resolver.js';
+export { getLinkRecordId, toLinkValue } from './link-helpers.js';
 
 // Repositories
 export { FacilityRepository } from './repositories/facility.js';

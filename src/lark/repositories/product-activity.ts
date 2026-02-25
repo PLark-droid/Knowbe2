@@ -1,34 +1,26 @@
 /**
  * ProductActivity Repository
+ *
+ * Link型フィールド ('事業所') には Lark record_id を書き込み、
+ * ドメインモデルの facilityId は テキスト型フィールドから読み取る。
  */
 
 import type { ProductActivity } from '../../types/domain.js';
 import type { BitableClient } from '../client.js';
 import type { LarkBitableRecord } from '../../types/lark.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
-
-function getLinkId(value: unknown): string {
-  if (Array.isArray(value)) {
-    const first = value[0];
-    return first != null ? String(first) : '';
-  }
-  return value != null ? String(value) : '';
-}
-
-function toLinkValue(id: string | undefined): string[] | undefined {
-  if (!id) return undefined;
-  return [id];
-}
+import { toLinkValue } from '../link-helpers.js';
+import type { LinkResolver } from '../link-resolver.js';
 
 /**
- * Link型フィールド ('事業所') からは record_id を取得しドメインIDとして使用。
- * フィルタ検索にはテキスト型の '事業所ID' フィールドを使用。
+ * Lark レコード -> ドメインエンティティ変換。
+ * 業務IDはテキスト型フィールド '事業所ID' から読み取る。
  */
 function toEntity(record: LarkBitableRecord): ProductActivity {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: getLinkId(f['事業所']),
+    facilityId: String(f['事業所ID'] ?? ''),
     name: String(f['活動名'] ?? ''),
     description: f['説明'] ? String(f['説明']) : undefined,
     hourlyRate: Number(f['作業単価'] ?? 0),
@@ -38,11 +30,10 @@ function toEntity(record: LarkBitableRecord): ProductActivity {
   };
 }
 
-function toFields(entity: Partial<ProductActivity>): Record<string, unknown> {
+function toBaseFields(entity: Partial<ProductActivity>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (entity.facilityId !== undefined) {
-    fields['事業所'] = toLinkValue(entity.facilityId);
-    fields['事業所ID'] = entity.facilityId; // テキスト型 (フィルタ検索用)
+    fields['事業所ID'] = entity.facilityId;
   }
   if (entity.name !== undefined) fields['活動名'] = entity.name;
   if (entity.description !== undefined) fields['説明'] = entity.description;
@@ -57,7 +48,23 @@ export class ProductActivityRepository {
   constructor(
     private readonly client: BitableClient,
     private readonly tableId: string,
+    private readonly linkResolver?: LinkResolver,
   ) {}
+
+  /** Link 型フィールドの record_id を解決してフィールドに追加する */
+  private async resolveLinks(
+    fields: Record<string, unknown>,
+    entity: Partial<ProductActivity>,
+  ): Promise<void> {
+    if (!this.linkResolver) return;
+
+    if (entity.facilityId !== undefined) {
+      const recordId = await this.linkResolver.resolve('facility', entity.facilityId);
+      if (recordId) {
+        fields['事業所'] = toLinkValue(recordId);
+      }
+    }
+  }
 
   async findAll(facilityId: string): Promise<ProductActivity[]> {
     const records = await this.client.listAll(this.tableId, {
@@ -77,12 +84,16 @@ export class ProductActivityRepository {
   }
 
   async create(data: Omit<ProductActivity, 'id'>): Promise<ProductActivity> {
-    const record = await this.client.create(this.tableId, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.create(this.tableId, fields);
     return toEntity(record);
   }
 
   async update(id: string, data: Partial<ProductActivity>): Promise<ProductActivity> {
-    const record = await this.client.update(this.tableId, id, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.update(this.tableId, id, fields);
     return toEntity(record);
   }
 

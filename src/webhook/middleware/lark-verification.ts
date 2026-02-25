@@ -1,12 +1,21 @@
 /**
  * Lark Webhook検証ミドルウェア
  * Challenge-responseによるURL検証 + イベントトークン検証
+ *
+ * Security: verificationTokenが空文字の場合、全リクエストを拒否する。
+ * 空トークンとの比較は常に成功しうるため認証が実質無効化される。
  */
 import type { Request, Response, NextFunction } from 'express';
 import type { LarkWebhookChallenge } from '../../types/lark.js';
 
 export function larkVerificationMiddleware(verificationToken: string) {
   return (req: Request, res: Response, next: NextFunction): void => {
+    // Defense-in-depth: 空のトークンでは検証が無意味になるため拒否
+    if (!verificationToken) {
+      res.status(503).json({ error: 'Webhook authentication not configured' });
+      return;
+    }
+
     const body = req.body as Record<string, unknown>;
 
     // Challenge-response for URL verification

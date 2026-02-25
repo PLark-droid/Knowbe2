@@ -151,6 +151,45 @@ describe('lineSignatureMiddleware', () => {
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ error: 'Invalid signature' });
   });
+
+  it('should reject when signature has different length (timing-safe comparison)', () => {
+    const middleware = lineSignatureMiddleware(channelSecret);
+    const body = Buffer.from(JSON.stringify({ events: [] }));
+
+    // A signature with totally different length
+    const req = createMockRequest({
+      headers: { 'x-line-signature': 'short' },
+      rawBody: body,
+    });
+    const res = createMockResponse();
+    let nextCalled = false;
+    const next: NextFunction = () => { nextCalled = true; };
+
+    middleware(req as unknown as Request, res as unknown as Response, next);
+
+    expect(nextCalled).toBe(false);
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: 'Invalid signature' });
+  });
+
+  it('should return 503 when channelSecret is empty', () => {
+    const middleware = lineSignatureMiddleware('');
+    const body = Buffer.from(JSON.stringify({ events: [] }));
+
+    const req = createMockRequest({
+      headers: { 'x-line-signature': 'some-signature' },
+      rawBody: body,
+    });
+    const res = createMockResponse();
+    let nextCalled = false;
+    const next: NextFunction = () => { nextCalled = true; };
+
+    middleware(req as unknown as Request, res as unknown as Response, next);
+
+    expect(nextCalled).toBe(false);
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toEqual({ error: 'Webhook authentication not configured' });
+  });
 });
 
 // ─── Rate Limit Middleware Tests ────────────────────────

@@ -31,7 +31,7 @@ const RETRYABLE_BITABLE_CODES = new Set([
 ]);
 
 /** レスポンスの code からリトライ可否を判定する */
-function isRetryableApiError(code: number): boolean {
+export function isRetryableApiError(code: number): boolean {
   // Bitable 範囲内でリトライ対象のコード
   if (RETRYABLE_BITABLE_CODES.has(code)) {
     return true;
@@ -41,6 +41,30 @@ function isRetryableApiError(code: number): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * Lark API エラー (code != 0)
+ *
+ * HTTP 200 でも Lark は code != 0 でビジネスエラーを返す。
+ * このクラスは code / msg / path を構造化プロパティとして公開し、
+ * 呼び出し元が `instanceof LarkApiError` で判定・フィールドを参照できる。
+ */
+export class LarkApiError extends Error {
+  override readonly name = 'LarkApiError';
+
+  constructor(
+    /** Lark API エラーコード */
+    public readonly larkCode: number,
+    /** Lark API エラーメッセージ */
+    public readonly larkMsg: string,
+    /** リクエストパス (BASE_URL 以降) */
+    public readonly path: string,
+    /** リトライ可能かどうか */
+    public readonly retryable: boolean,
+  ) {
+    super(`Lark API error [${path}]: code=${larkCode} msg=${larkMsg}`);
+  }
 }
 
 export interface BitableClientConfig {
@@ -164,15 +188,18 @@ export class BitableClient {
 
         // Lark は HTTP 200 でも code != 0 でエラーを返す
         if (json.code !== 0) {
-          const message = `Lark API error [${path}]: code=${json.code} msg=${json.msg}`;
+          const retryable = isRetryableApiError(json.code);
+          const apiError = new LarkApiError(json.code, json.msg, path, retryable);
 
-          if (isRetryableApiError(json.code)) {
-            // リトライ可能なエラー → 通常の Error で p-retry がリトライする
-            throw new Error(message);
+          if (retryable) {
+            // リトライ可能なエラー → LarkApiError で p-retry がリトライする
+            throw apiError;
           }
 
-          // リトライ不可 → AbortError で即座に失敗させる
-          throw new AbortError(message);
+          // リトライ不可 → AbortError に LarkApiError を渡して即座に失敗させる
+          // p-retry は AbortError.originalError を re-throw するので、
+          // 呼び出し元には LarkApiError がそのまま届く
+          throw new AbortError(apiError);
         }
 
         return json as unknown as T;

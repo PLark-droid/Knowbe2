@@ -1,17 +1,22 @@
 /**
  * WageCalculationRepository
+ *
+ * Link型フィールド ('事業所', '利用者') には Lark record_id を書き込み、
+ * ドメインモデルの facilityId / userId は テキスト型フィールドから読み取る。
  */
 
 import type { WageCalculation, WageStatus } from '../../types/domain.js';
 import type { LarkBitableRecord } from '../../types/lark.js';
 import type { BitableClient } from '../client.js';
 import { sanitizeLarkFilterValue } from '../sanitize.js';
+import { toLinkValue } from '../link-helpers.js';
+import type { LinkResolver } from '../link-resolver.js';
 
 const FIELD = {
   FACILITY: '事業所',
-  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用)
+  FACILITY_ID: '事業所ID', // テキスト型 (フィルタ検索用 + 業務ID読み取り)
   USER: '利用者',
-  USER_ID: '利用者ID', // テキスト型 (フィルタ検索用)
+  USER_ID: '利用者ID', // テキスト型 (フィルタ検索用 + 業務ID読み取り)
   YEAR_MONTH: '対象年月',
   TOTAL_WORK_MINUTES: '作業時間合計',
   ATTENDANCE_DAYS: '出勤日数',
@@ -25,19 +30,6 @@ const FIELD = {
   CREATED_AT: '作成日時',
   UPDATED_AT: '更新日時',
 } as const;
-
-function getLinkId(value: unknown): string {
-  if (Array.isArray(value)) {
-    const first = value[0];
-    return first != null ? String(first) : '';
-  }
-  return value != null ? String(value) : '';
-}
-
-function toLinkValue(id: string | undefined): string[] | undefined {
-  if (!id) return undefined;
-  return [id];
-}
 
 function toStatus(raw: unknown): WageStatus {
   const s = String(raw ?? '下書き');
@@ -62,15 +54,15 @@ function toStatusLabel(value: WageStatus): string {
 }
 
 /**
- * Link型フィールド ('事業所', '利用者') からは record_id を取得しドメインIDとして使用。
- * フィルタ検索にはテキスト型の '事業所ID' / '利用者ID' フィールドを使用。
+ * Lark レコード -> ドメインエンティティ変換。
+ * 業務IDはテキスト型フィールドから読み取る。
  */
 function toEntity(record: LarkBitableRecord): WageCalculation {
   const f = record.fields as Record<string, unknown>;
   return {
     id: record.record_id,
-    facilityId: getLinkId(f[FIELD.FACILITY]),
-    userId: getLinkId(f[FIELD.USER]),
+    facilityId: String(f[FIELD.FACILITY_ID] ?? ''),
+    userId: String(f[FIELD.USER_ID] ?? ''),
     yearMonth: String(f[FIELD.YEAR_MONTH] ?? ''),
     totalWorkMinutes: Number(f[FIELD.TOTAL_WORK_MINUTES]) || 0,
     attendanceDays: Number(f[FIELD.ATTENDANCE_DAYS]) || 0,
@@ -86,14 +78,12 @@ function toEntity(record: LarkBitableRecord): WageCalculation {
   };
 }
 
-function toFields(entity: Partial<WageCalculation>): Record<string, unknown> {
+function toBaseFields(entity: Partial<WageCalculation>): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   if (entity.facilityId !== undefined) {
-    fields[FIELD.FACILITY] = toLinkValue(entity.facilityId);
     fields[FIELD.FACILITY_ID] = entity.facilityId;
   }
   if (entity.userId !== undefined) {
-    fields[FIELD.USER] = toLinkValue(entity.userId);
     fields[FIELD.USER_ID] = entity.userId;
   }
   if (entity.yearMonth !== undefined) fields[FIELD.YEAR_MONTH] = entity.yearMonth;
@@ -123,7 +113,29 @@ export class WageCalculationRepository {
   constructor(
     private readonly client: BitableClient,
     private readonly tableId: string,
+    private readonly linkResolver?: LinkResolver,
   ) {}
+
+  /** Link 型フィールドの record_id を解決してフィールドに追加する */
+  private async resolveLinks(
+    fields: Record<string, unknown>,
+    entity: Partial<WageCalculation>,
+  ): Promise<void> {
+    if (!this.linkResolver) return;
+
+    if (entity.facilityId !== undefined) {
+      const recordId = await this.linkResolver.resolve('facility', entity.facilityId);
+      if (recordId) {
+        fields[FIELD.FACILITY] = toLinkValue(recordId);
+      }
+    }
+    if (entity.userId !== undefined) {
+      const recordId = await this.linkResolver.resolve('user', entity.userId);
+      if (recordId) {
+        fields[FIELD.USER] = toLinkValue(recordId);
+      }
+    }
+  }
 
   async findAll(facilityId: string): Promise<WageCalculation[]> {
     const records = await this.client.listAll(this.tableId, {
@@ -139,12 +151,16 @@ export class WageCalculationRepository {
   }
 
   async create(data: Omit<WageCalculation, 'id'>): Promise<WageCalculation> {
-    const record = await this.client.create(this.tableId, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.create(this.tableId, fields);
     return toEntity(record);
   }
 
   async update(id: string, data: Partial<WageCalculation>): Promise<WageCalculation> {
-    const record = await this.client.update(this.tableId, id, toFields(data));
+    const fields = toBaseFields(data);
+    await this.resolveLinks(fields, data);
+    const record = await this.client.update(this.tableId, id, fields);
     return toEntity(record);
   }
 
