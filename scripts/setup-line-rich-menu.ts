@@ -105,7 +105,7 @@ const CELLS: MenuCell[] = [
     row: 0,
     iconPath:
       'M7 2v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H9V2H7zm-2 6h14v12H5V8zm2 2v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v2h2v-2h-2zm-8 4v2h2v-2H7zm4 0v2h2v-2h-2z',
-    accentColor: '#4CAF50',
+    accentColor: '#43B581',
   },
   {
     label: '体調チェック',
@@ -113,7 +113,7 @@ const CELLS: MenuCell[] = [
     row: 0,
     iconPath:
       'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z',
-    accentColor: '#E91E63',
+    accentColor: '#E8768A',
   },
   {
     label: '支援記録',
@@ -121,7 +121,7 @@ const CELLS: MenuCell[] = [
     row: 1,
     iconPath:
       'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm2-6h8v2H8v-2zm0-3h8v2H8v-2z',
-    accentColor: '#2196F3',
+    accentColor: '#5B9BD5',
   },
   {
     label: 'メニュー',
@@ -129,7 +129,7 @@ const CELLS: MenuCell[] = [
     row: 1,
     iconPath:
       'M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14zm-4.2-5.78v1.75l3.2-2.99L12.8 9v1.7c-3.11.43-4.35 2.56-4.8 4.7 1.11-1.55 2.69-2.18 4.8-2.18z',
-    accentColor: '#FF9800',
+    accentColor: '#E8A54B',
   },
 ];
 
@@ -148,6 +148,9 @@ const CELLS: MenuCell[] = [
 function buildRichMenuSvg(): string {
   const cellWidth = HALF_WIDTH;
   const cellHeight = HALF_HEIGHT;
+  const pad = 20; // padding between cells
+  const cornerRadius = 40;
+  const bgColor = '#D5D5D5'; // gray background behind cells
 
   const fontFamily =
     "'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', 'Noto Sans JP', sans-serif";
@@ -160,48 +163,42 @@ function buildRichMenuSvg(): string {
     const centerX = x + cellWidth / 2;
     const centerY = y + cellHeight / 2;
 
-    // Background rectangle with subtle gradient
+    // Solid color rounded rectangle (inset with padding)
+    const rx = x + pad;
+    const ry = y + pad;
+    const rw = cellWidth - pad * 2;
+    const rh = cellHeight - pad * 2;
     cellsSvg += `
-      <rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" fill="#FFFFFF"/>
-      <rect x="${x + 40}" y="${y + 40}" width="${cellWidth - 80}" height="${cellHeight - 80}"
-            rx="40" ry="40" fill="${cell.accentColor}" opacity="0.08"/>
+      <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}"
+            rx="${cornerRadius}" ry="${cornerRadius}" fill="${cell.accentColor}"/>
     `;
 
-    // Icon (scaled from 24x24 SVG path to larger size)
-    const iconScale = 6;
+    // White icon (scaled from 24x24 SVG path)
+    const iconScale = 8;
     const iconSize = 24 * iconScale;
     const iconX = centerX - iconSize / 2;
-    const iconY = centerY - iconSize / 2 - 80;
+    const iconY = centerY - iconSize / 2 - 100;
     cellsSvg += `
       <g transform="translate(${iconX}, ${iconY}) scale(${iconScale})">
-        <path d="${cell.iconPath}" fill="${cell.accentColor}" />
+        <path d="${cell.iconPath}" fill="#FFFFFF" />
       </g>
     `;
 
-    // Label text
-    const textY = centerY + iconSize / 2 - 20;
+    // White label text
+    const textY = centerY + iconSize / 2 - 30;
     cellsSvg += `
       <text x="${centerX}" y="${textY}" text-anchor="middle"
-            font-family="${fontFamily}" font-size="80" font-weight="600"
-            fill="#333333">${cell.label}</text>
+            font-family="${fontFamily}" font-size="100" font-weight="bold"
+            fill="#FFFFFF">${cell.label}</text>
     `;
   }
-
-  // Divider lines
-  const dividersSvg = `
-    <line x1="${HALF_WIDTH}" y1="0" x2="${HALF_WIDTH}" y2="${MENU_HEIGHT}"
-          stroke="#E0E0E0" stroke-width="4"/>
-    <line x1="0" y1="${HALF_HEIGHT}" x2="${MENU_WIDTH}" y2="${HALF_HEIGHT}"
-          stroke="#E0E0E0" stroke-width="4"/>
-  `;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg"
      width="${MENU_WIDTH}" height="${MENU_HEIGHT}"
      viewBox="0 0 ${MENU_WIDTH} ${MENU_HEIGHT}">
-  <rect width="${MENU_WIDTH}" height="${MENU_HEIGHT}" fill="#FFFFFF"/>
+  <rect width="${MENU_WIDTH}" height="${MENU_HEIGHT}" fill="${bgColor}"/>
   ${cellsSvg}
-  ${dividersSvg}
 </svg>`;
 }
 
