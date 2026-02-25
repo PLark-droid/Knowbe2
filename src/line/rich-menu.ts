@@ -12,6 +12,8 @@ import { messagingApi } from '@line/bot-sdk';
 export interface RichMenuSetupConfig {
   /** LINE チャネルアクセストークン */
   channelAccessToken: string;
+  /** LIFF ID (体調チェック画面遷移先) */
+  liffId: string;
   /** リッチメニュー画像パス (PNG, 2500x1686) */
   imagePath?: string;
 }
@@ -27,7 +29,7 @@ export interface RichMenuSetupConfig {
  *
  * @returns RichMenuRequest オブジェクト
  */
-export function createRichMenuObject(): messagingApi.RichMenuRequest {
+export function createRichMenuObject(liffId: string): messagingApi.RichMenuRequest {
   return {
     size: { width: 2500, height: 1686 },
     selected: true,
@@ -46,7 +48,7 @@ export function createRichMenuObject(): messagingApi.RichMenuRequest {
         bounds: { x: 0, y: 843, width: 1250, height: 843 },
         action: {
           type: 'uri',
-          uri: 'https://liff.line.me/${LIFF_ID}/health-check',
+          uri: `https://liff.line.me/${liffId}/health-check`,
         },
       },
       {
@@ -72,7 +74,7 @@ export async function setupRichMenu(config: RichMenuSetupConfig): Promise<string
   });
 
   // 1. リッチメニュー作成
-  const response = await client.createRichMenu(createRichMenuObject());
+  const response = await client.createRichMenu(createRichMenuObject(config.liffId));
   const richMenuId = response.richMenuId;
 
   // 2. 画像アップロード (指定がある場合)

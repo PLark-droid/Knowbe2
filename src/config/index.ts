@@ -36,6 +36,17 @@ class ConfigError extends Error {
   }
 }
 
+class ConfigValueError extends Error {
+  constructor(
+    public readonly key: string,
+    public readonly value: string,
+    reason: string,
+  ) {
+    super(`Invalid configuration value for ${key}: "${value}" (${reason})`);
+    this.name = 'ConfigValueError';
+  }
+}
+
 let cachedConfig: AppConfig | null = null;
 
 function parseNodeEnv(value: string | undefined): AppConfig['server']['nodeEnv'] {
@@ -43,6 +54,19 @@ function parseNodeEnv(value: string | undefined): AppConfig['server']['nodeEnv']
     return value;
   }
   return 'development';
+}
+
+function parsePort(value: string | undefined): number {
+  if (!value || value.trim() === '') {
+    return 3000;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new ConfigValueError('PORT', value, 'must be an integer between 1 and 65535');
+  }
+
+  return parsed;
 }
 
 /**
@@ -77,7 +101,7 @@ export function loadConfig(options?: { required?: boolean }): AppConfig {
       verificationToken: getEnv('LARK_VERIFICATION_TOKEN'),
     },
     server: {
-      port: parseInt(process.env['PORT'] ?? '3000', 10),
+      port: parsePort(process.env['PORT']),
       nodeEnv: parseNodeEnv(process.env['NODE_ENV']),
     },
     github: {
@@ -99,4 +123,4 @@ export function resetConfig(): void {
   cachedConfig = null;
 }
 
-export { ConfigError };
+export { ConfigError, ConfigValueError };

@@ -19,7 +19,10 @@ export class LarkAuth {
       return this.token.token;
     }
     await this.refresh();
-    return this.token!.token;
+    if (!this.token) {
+      throw new Error('Lark auth token refresh did not return a token');
+    }
+    return this.token.token;
   }
 
   /** トークンをリフレッシュ */
@@ -38,14 +41,24 @@ export class LarkAuth {
     }
 
     const data = (await res.json()) as {
-      code: number;
-      msg: string;
-      tenant_access_token: string;
-      expire: number;
+      code?: number;
+      msg?: string;
+      tenant_access_token?: string;
+      expire?: number;
     };
 
     if (data.code !== 0) {
       throw new Error(`Lark auth error: ${data.code} ${data.msg}`);
+    }
+
+    if (
+      typeof data.tenant_access_token !== 'string' ||
+      data.tenant_access_token === '' ||
+      typeof data.expire !== 'number' ||
+      !Number.isFinite(data.expire) ||
+      data.expire <= 0
+    ) {
+      throw new Error('Lark auth payload is invalid');
     }
 
     this.token = {

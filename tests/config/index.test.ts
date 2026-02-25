@@ -2,7 +2,7 @@
  * Config manager tests
  */
 
-import { loadConfig, resetConfig, ConfigError } from '../../src/config/index.js';
+import { loadConfig, resetConfig, ConfigError, ConfigValueError } from '../../src/config/index.js';
 
 describe('Config Manager', () => {
   const originalEnv = { ...process.env };
@@ -77,6 +77,13 @@ describe('Config Manager', () => {
 
       const config = loadConfig({ required: false });
       expect(config.server.port).toBe(8080);
+    });
+
+    it('should throw ConfigValueError for invalid PORT values', () => {
+      process.env['PORT'] = 'abc';
+      resetConfig();
+
+      expect(() => loadConfig({ required: false })).toThrow(ConfigValueError);
     });
   });
 
@@ -250,6 +257,19 @@ describe('Config Manager', () => {
     it('should be an instance of Error', () => {
       const err = new ConfigError([]);
       expect(err).toBeInstanceOf(Error);
+    });
+  });
+
+  describe('ConfigValueError', () => {
+    it('should have name set to ConfigValueError', () => {
+      const err = new ConfigValueError('PORT', '70000', 'must be valid');
+      expect(err.name).toBe('ConfigValueError');
+    });
+
+    it('should include key and value in message', () => {
+      const err = new ConfigValueError('PORT', 'abc', 'must be valid');
+      expect(err.message).toContain('PORT');
+      expect(err.message).toContain('abc');
     });
   });
 });

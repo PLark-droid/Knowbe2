@@ -32,6 +32,25 @@ const LARK_TABLE_HEALTH_CHECK = process.env['LARK_TABLE_HEALTH_CHECK'] ?? '';
 const NODE_ENV = process.env['NODE_ENV'] ?? 'development';
 const isProduction = NODE_ENV === 'production';
 
+function normalizeScore(value: unknown): 1 | 2 | 3 | 4 | 5 {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5) {
+    return value as 1 | 2 | 3 | 4 | 5;
+  }
+  return 3;
+}
+
+function normalizeMeals(value: unknown): { breakfast: boolean; lunch: boolean; dinner: boolean } {
+  if (!value || typeof value !== 'object') {
+    return { breakfast: false, lunch: false, dinner: false };
+  }
+  const meals = value as Record<string, unknown>;
+  return {
+    breakfast: meals['breakfast'] === true,
+    lunch: meals['lunch'] === true,
+    dinner: meals['dinner'] === true,
+  };
+}
+
 // ─── Webhook シークレット検証 (fail-fast) ────────────────────
 // セキュリティ: 空のシークレットではHMAC署名/トークン検証が実質無効化される。
 // 本番環境ではWebhook認証に必要な全シークレットを必須とし、未設定時は即座に終了する。
@@ -112,27 +131,29 @@ const larkHandler = createLarkWebhookHandler({
 async function healthCheckApiHandler(req: Request, res: Response): Promise<void> {
   try {
     const body = req.body as {
-      lineUserId?: string;
-      score?: number;
+      lineUserId?: unknown;
+      score?: unknown;
       sleepHours?: number;
-      meals?: { breakfast: boolean; lunch: boolean; dinner: boolean };
+      meals?: unknown;
       mood?: string;
       note?: string;
     };
 
-    if (!body.lineUserId) {
+    if (typeof body.lineUserId !== 'string' || body.lineUserId.trim() === '') {
       res.status(400).json({ error: 'lineUserId is required' });
       return;
     }
 
-    const user = await userRepo.findByLineUserId(body.lineUserId);
+    const lineUserId = body.lineUserId.trim();
+
+    const user = await userRepo.findByLineUserId(lineUserId);
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
     const today = new Date().toISOString().slice(0, 10);
-    const score = (body.score ?? 3) as 1 | 2 | 3 | 4 | 5;
+    const score = normalizeScore(body.score);
 
     const healthCheck = await healthCheckRepo.create({
       facilityId: user.facilityId,
@@ -140,7 +161,7 @@ async function healthCheckApiHandler(req: Request, res: Response): Promise<void>
       date: today,
       score,
       sleepHours: body.sleepHours,
-      meals: body.meals ?? { breakfast: false, lunch: false, dinner: false },
+      meals: normalizeMeals(body.meals),
       mood: body.mood,
       note: body.note,
       createdAt: new Date().toISOString(),
@@ -150,7 +171,7 @@ async function healthCheckApiHandler(req: Request, res: Response): Promise<void>
     if (lineMessaging) {
       try {
         const flexMsg = lineMessaging.buildHealthCheckResult(user.name, score);
-        await lineMessaging.pushMessage(body.lineUserId, [flexMsg]);
+        await lineMessaging.pushMessage(lineUserId, [flexMsg]);
       } catch (lineErr) {
         console.error('LINE push message failed:', lineErr);
       }

@@ -67,7 +67,7 @@ function createHealthCheckApiHandler(deps: HealthCheckApiDeps) {
       });
 
       res.status(201).json({ status: 'ok', healthCheck });
-    } catch (_err) {
+    } catch {
       res.status(500).json({ error: 'Health check processing failed' });
     }
   };
