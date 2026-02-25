@@ -1,12 +1,43 @@
 # Knowbe2 - Claude Code Context (Miyabi v0.20.0)
 
-## プロジェクト概要
+## プロダクト概要
 
-**Knowbe2** - Miyabi Framework v0.20.0 で構築された自律型開発プラットフォーム
+**Knowbe2** — B型就労支援事業所向け業務支援システム（knowbe代替）
 
-識学理論(Shikigaku Theory) + AI Agents + Pipeline Execution による完全自律開発環境。
+LINE公式アカウントを利用者との窓口にし、Lark Form/Baseで勤怠・体調データを収集、国保連請求CSVと工賃データCSVを自動生成するクラウドサービス。
 
-## 🌸 Miyabi Framework v0.20.0
+### システムアーキテクチャ
+
+```
+利用者 (B型就労支援事業所)
+  ↓ LINE公式アカウント (Messaging API)
+  ↓ Webhook
+Lark Form → Lark Base (データベース)
+  ├── 利用者マスタ
+  ├── 日々の勤怠記録 (出退勤・作業時間)
+  ├── 体調チェック (日次)
+  ├── 支援記録
+  └── サービス提供実績
+  ↓ CSV生成エンジン
+  ├── 国保連請求CSV (介護給付費等の請求)
+  └── 工賃データCSV (利用者別工賃計算)
+```
+
+### 主要コンポーネント
+
+| コンポーネント | 技術 | 役割 |
+|-------------|------|------|
+| 利用者窓口 | LINE公式アカウント (Messaging API) | 勤怠打刻・体調報告・お知らせ配信 |
+| データ収集 | Lark Form | 勤怠フォーム・体調チェックフォーム |
+| データベース | Lark Base (Bitable) | 利用者情報・実績・支援記録の一元管理 |
+| CSV生成 | TypeScript エンジン | 国保連請求CSV・工賃データCSV |
+| 開発基盤 | Miyabi Framework v0.20.0 | AI Agent駆動の自律型開発環境 |
+
+### 競合 (リプレース対象)
+
+**knowbe（ノウビー）** — 株式会社リクルート提供の障害福祉向けクラウド型業務支援ソフト
+
+## 開発基盤: Miyabi Framework v0.20.0
 
 ### 7つの Coding Agents
 
@@ -139,9 +170,19 @@ Knowbe2/
 ## 環境変数
 
 ```bash
+# 開発基盤
 GITHUB_TOKEN=ghp_xxxxx         # GitHub PAT (必須)
 ANTHROPIC_API_KEY=sk-ant-xxxxx # Anthropic API Key (Agent実行時)
 MIYABI_WEBHOOK_URL=             # Webhook URL (オプション)
+
+# LINE
+LINE_CHANNEL_ACCESS_TOKEN=      # LINE Messaging API チャネルアクセストークン
+LINE_CHANNEL_SECRET=            # LINE チャネルシークレット
+
+# Lark
+LARK_APP_ID=                    # Lark アプリID
+LARK_APP_SECRET=                # Lark アプリシークレット
+LARK_BASE_APP_TOKEN=            # Lark Base アプリトークン
 ```
 
 ## 識学理論 5原則

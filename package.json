@@ -20,7 +20,9 @@
     "miyabi:agent": "tsx src/cli/agent.ts",
     "miyabi:auto": "tsx src/cli/auto.ts",
     "miyabi:todos": "tsx src/cli/todos.ts",
-    "webhook:server": "tsx src/webhook/server.ts",
+    "webhook:server": "tsx --env-file=.env src/webhook/start.ts",
+    "csv:export": "tsx src/cli/export-csv.ts",
+    "billing:run": "tsx src/cli/monthly-billing.ts",
     "pipeline": "tsx src/cli/pipeline.ts"
   },
   "keywords": [
@@ -33,7 +35,9 @@
   "author": "PLark-droid",
   "license": "Apache-2.0",
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
+    "@types/sharp": "^0.31.1",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitest/coverage-v8": "^3.0.0",
@@ -44,16 +48,22 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@larksuiteoapi/node-sdk": "^1.59.0",
+    "@line/bot-sdk": "^10.6.0",
     "@modelcontextprotocol/sdk": "^1.20.0",
-    "@octokit/rest": "^21.1.1",
     "@octokit/graphql": "^8.2.1",
-    "chalk": "^5.4.1",
-    "ora": "^8.2.0",
+    "@octokit/rest": "^21.1.1",
     "boxen": "^8.0.1",
+    "chalk": "^5.4.1",
     "cli-table3": "^0.6.5",
+    "csv-stringify": "^6.6.0",
+    "express": "^5.2.1",
+    "iconv-lite": "^0.7.2",
     "log-symbols": "^7.0.0",
     "lru-cache": "^11.0.2",
-    "p-retry": "^6.2.1"
+    "ora": "^8.2.0",
+    "p-retry": "^6.2.1",
+    "sharp": "^0.34.5"
   },
   "engines": {
     "node": ">=20.0.0"

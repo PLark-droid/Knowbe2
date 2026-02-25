@@ -2,6 +2,12 @@
  * Miyabi Framework Core Types
  */
 
+// ─── B型就労支援ドメイン型 ─────────────────────────────────
+export * from './domain.js';
+export * from './line.js';
+export * from './lark.js';
+export * from './csv.js';
+
 // ─── Agent Types ───────────────────────────────────────────
 
 export type AgentType =
