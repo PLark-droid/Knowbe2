@@ -1,0 +1,55 @@
+# ============================================================
+# Knowbe2 .dockerignore
+# Docker ビルドコンテキストから除外するファイル
+# ============================================================
+
+# 依存関係 (コンテナ内で npm ci する)
+node_modules/
+
+# ビルド成果物 (コンテナ内で再ビルドする)
+dist/
+
+# Git
+.git/
+.gitignore
+
+# テスト
+tests/
+*.test.ts
+*.spec.ts
+vitest.config.ts
+coverage/
+
+# 開発ツール・設定
+.claude/
+.codex/
+.codex-full-review.md
+.vscode/
+.idea/
+.eslintrc*
+eslint.config.*
+
+# ドキュメント
+*.md
+LICENSE
+docs/
+
+# 環境変数 (機密情報を含む)
+.env
+.env.*
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# デプロイ設定 (イメージ実行に不要)
+cloudbuild.yaml
+scripts/deploy-cloud-run.sh
+
+# GitHub Actions
+.github/
+
+# アセット (リッチメニュー画像など)
+assets/

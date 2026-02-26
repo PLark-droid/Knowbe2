@@ -1,0 +1,104 @@
+# ============================================================
+# Knowbe2 - Google Cloud Build CI/CD パイプライン
+# Artifact Registry にイメージをビルド・プッシュし、Cloud Run にデプロイ
+# ============================================================
+#
+# 前提条件:
+#   1. Artifact Registry リポジトリを作成済み:
+#      gcloud artifacts repositories create knowbe2 \
+#        --repository-format=docker \
+#        --location=asia-northeast1
+#
+#   2. Secret Manager にシークレットを登録済み:
+#      gcloud secrets create LINE_CHANNEL_SECRET --data-file=-
+#      gcloud secrets create LINE_CHANNEL_ACCESS_TOKEN --data-file=-
+#      gcloud secrets create LARK_APP_ID --data-file=-
+#      gcloud secrets create LARK_APP_SECRET --data-file=-
+#      gcloud secrets create LARK_VERIFICATION_TOKEN --data-file=-
+#      gcloud secrets create LARK_BASE_APP_TOKEN --data-file=-
+#      gcloud secrets create LARK_TABLE_USER --data-file=-
+#      gcloud secrets create LARK_TABLE_ATTENDANCE --data-file=-
+#      gcloud secrets create LARK_TABLE_HEALTH_CHECK --data-file=-
+#
+#   3. Cloud Build サービスアカウントに権限を付与:
+#      - roles/run.admin
+#      - roles/iam.serviceAccountUser
+#      - roles/secretmanager.secretAccessor
+
+substitutions:
+  _REGION: asia-northeast1
+  _REPOSITORY: knowbe2
+  _SERVICE_NAME: knowbe2-webhook
+  _IMAGE_NAME: asia-northeast1-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}
+
+steps:
+  # Step 1: Docker イメージをビルド
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--pull'
+      - '-t'
+      - '${_IMAGE_NAME}:${SHORT_SHA}'
+      - '-t'
+      - '${_IMAGE_NAME}:latest'
+      - '.'
+
+  # Step 2: Artifact Registry にプッシュ
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_IMAGE_NAME}'
+
+  # Step 3: Cloud Run にデプロイ
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image'
+      - '${_IMAGE_NAME}:${SHORT_SHA}'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--execution-environment'
+      - 'gen2'
+      - '--allow-unauthenticated'
+      - '--ingress'
+      - 'all'
+      - '--memory'
+      - '256Mi'
+      - '--cpu'
+      - '1'
+      - '--timeout'
+      - '300'
+      - '--concurrency'
+      - '80'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '10'
+      - '--port'
+      - '8080'
+      - '--set-env-vars'
+      - 'NODE_ENV=production,PORT=8080'
+      - '--set-secrets'
+      - >-
+        LINE_CHANNEL_SECRET=LINE_CHANNEL_SECRET:latest,
+        LINE_CHANNEL_ACCESS_TOKEN=LINE_CHANNEL_ACCESS_TOKEN:latest,
+        LARK_APP_ID=LARK_APP_ID:latest,
+        LARK_APP_SECRET=LARK_APP_SECRET:latest,
+        LARK_VERIFICATION_TOKEN=LARK_VERIFICATION_TOKEN:latest,
+        LARK_BASE_APP_TOKEN=LARK_BASE_APP_TOKEN:latest,
+        LARK_TABLE_USER=LARK_TABLE_USER:latest,
+        LARK_TABLE_ATTENDANCE=LARK_TABLE_ATTENDANCE:latest,
+        LARK_TABLE_HEALTH_CHECK=LARK_TABLE_HEALTH_CHECK:latest
+
+images:
+  - '${_IMAGE_NAME}:${SHORT_SHA}'
+  - '${_IMAGE_NAME}:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
