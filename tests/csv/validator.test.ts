@@ -81,4 +81,53 @@ describe('validateKokuhoRenRecords', () => {
     expect(result.errors.some((e) => e.field === 'recipientNumber')).toBe(true);
     expect(result.errors.some((e) => e.field === 'days')).toBe(true);
   });
+
+  it('should fail when nameKana contains half-width kana or romaji', () => {
+    const records = createValidRecords();
+    const data = records[1] as KokuhoRenDataRecord;
+    data.nameKana = 'ﾀﾅｶTARO';
+
+    const result = validateKokuhoRenRecords(records);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === 'nameKana')).toBe(true);
+  });
+
+  it('should fail when birth date is not a real date', () => {
+    const records = createValidRecords();
+    const data = records[1] as KokuhoRenDataRecord;
+    data.dateOfBirth = '19990230';
+
+    const result = validateKokuhoRenRecords(records);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === 'dateOfBirth')).toBe(true);
+  });
+
+  it('should fail when birth date is in future or before 1900', () => {
+    const futureRecords = createValidRecords();
+    const futureData = futureRecords[1] as KokuhoRenDataRecord;
+    futureData.dateOfBirth = '29990101';
+
+    const pastRecords = createValidRecords();
+    const pastData = pastRecords[1] as KokuhoRenDataRecord;
+    pastData.dateOfBirth = '18991231';
+
+    const futureResult = validateKokuhoRenRecords(futureRecords);
+    const pastResult = validateKokuhoRenRecords(pastRecords);
+
+    expect(futureResult.errors.some((e) => e.field === 'dateOfBirth')).toBe(true);
+    expect(pastResult.errors.some((e) => e.field === 'dateOfBirth')).toBe(true);
+  });
+
+  it('should fail when total service units exceed monthly cap', () => {
+    const records = createValidRecords();
+    const data = records[1] as KokuhoRenDataRecord;
+    data.totalServiceUnits = 31001;
+
+    const result = validateKokuhoRenRecords(records);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === 'totalServiceUnits')).toBe(true);
+  });
 });

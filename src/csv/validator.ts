@@ -11,6 +11,9 @@ import type {
   CsvValidationError,
 } from '../types/csv.js';
 
+const NAME_KANA_PATTERN = /^[ァ-ンヴー 　]+$/u;
+const MAX_MONTHLY_SERVICE_UNITS_PER_USER = 31000;
+
 export interface CsvValidationResult {
   valid: boolean;
   errors: CsvValidationError[];
@@ -97,13 +100,68 @@ function validateDataRecord(record: KokuhoRenDataRecord, index: number, errors: 
   if (!/^\d{10}$/.test(record.recipientNumber)) {
     errors.push({ field: 'recipientNumber', value: record.recipientNumber, message: '受給者証番号は10桁', recordIndex: index });
   }
+  if (!NAME_KANA_PATTERN.test(record.nameKana)) {
+    errors.push({
+      field: 'nameKana',
+      value: record.nameKana,
+      message: '氏名カナは全角カタカナ(ア-ン・ヴ・ー・スペース)のみ',
+      recordIndex: index,
+    });
+  }
+  const birthDate = parseCompactDate(record.dateOfBirth);
+  if (!birthDate) {
+    errors.push({
+      field: 'dateOfBirth',
+      value: record.dateOfBirth,
+      message: '生年月日は実在するYYYYMMDD形式',
+      recordIndex: index,
+    });
+  } else {
+    const minDate = new Date(1900, 0, 1);
+    minDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (birthDate < minDate || birthDate > today) {
+      errors.push({
+        field: 'dateOfBirth',
+        value: record.dateOfBirth,
+        message: '生年月日は1900-01-01以降かつ未来日不可',
+        recordIndex: index,
+      });
+    }
+  }
   if (record.units <= 0) {
     errors.push({ field: 'units', value: record.units, message: '単位数は正の値', recordIndex: index });
   }
   if (record.days <= 0 || record.days > 31) {
     errors.push({ field: 'days', value: record.days, message: '日数は1〜31', recordIndex: index });
   }
+  if (record.totalServiceUnits > MAX_MONTHLY_SERVICE_UNITS_PER_USER) {
+    errors.push({
+      field: 'totalServiceUnits',
+      value: record.totalServiceUnits,
+      message: `月間サービス単位数は${MAX_MONTHLY_SERVICE_UNITS_PER_USER}以下`,
+      recordIndex: index,
+    });
+  }
   if (record.benefitClaimAmount < 0) {
     errors.push({ field: 'benefitClaimAmount', value: record.benefitClaimAmount, message: '給付費請求額は0以上', recordIndex: index });
   }
+}
+
+function parseCompactDate(value: string): Date | null {
+  if (!/^\d{8}$/.test(value)) return null;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(4, 6));
+  const day = Number(value.slice(6, 8));
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) {
+    return null;
+  }
+  date.setHours(0, 0, 0, 0);
+  return date;
 }

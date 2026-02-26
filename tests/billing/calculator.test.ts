@@ -14,6 +14,7 @@ function createFacility(overrides?: Partial<Facility>): Facility {
     name: 'テスト事業所',
     corporateName: 'テスト法人',
     facilityNumber: '1300000001',
+    insurerNumber: '13000001',
     address: '東京都千代田区1-1-1',
     postalCode: '100-0001',
     phone: '03-1234-5678',
@@ -151,6 +152,25 @@ describe('BillingCalculator', () => {
 
       expect(baseDetail).toBeDefined();
       expect(baseDetail!.units).toBe(502);
+    });
+
+    it('should calculate structure III base units from capacity category', () => {
+      const facility = createFacility({
+        rewardStructure: 'III',
+        capacity: 41,
+      });
+      const user = createServiceUser();
+      const attendanceMap = new Map<string, Attendance[]>();
+      attendanceMap.set('user-001', [createAttendance()]);
+
+      const result = calculator.calculate('2025-06', facility, [user], attendanceMap);
+      const billing = result.userBillings[0]!;
+      const baseDetail = billing.serviceDetails.find(
+        (d) => d.serviceName === '就労継続支援B型サービス費',
+      );
+
+      expect(baseDetail).toBeDefined();
+      expect(baseDetail!.units).toBe(536);
     });
 
     it('should apply area unit price correctly', () => {

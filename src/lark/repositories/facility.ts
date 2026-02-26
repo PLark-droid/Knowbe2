@@ -57,6 +57,7 @@ function toEntity(record: LarkBitableRecord): Facility {
     name: String(f['事業所名'] ?? ''),
     corporateName: String(f['法人名'] ?? ''),
     facilityNumber: String(f['事業所番号'] ?? ''),
+    insurerNumber: String(f['保険者番号'] ?? ''),
     address: String(f['所在地'] ?? ''),
     postalCode: String(f['郵便番号'] ?? ''),
     phone: String(f['電話番号'] ?? ''),
@@ -77,6 +78,7 @@ function toFields(entity: Partial<Facility>): Record<string, unknown> {
   if (entity.name !== undefined) fields['事業所名'] = entity.name;
   if (entity.corporateName !== undefined) fields['法人名'] = entity.corporateName;
   if (entity.facilityNumber !== undefined) fields['事業所番号'] = entity.facilityNumber;
+  if (entity.insurerNumber !== undefined) fields['保険者番号'] = entity.insurerNumber;
   if (entity.address !== undefined) fields['所在地'] = entity.address;
   if (entity.postalCode !== undefined) fields['郵便番号'] = entity.postalCode;
   if (entity.phone !== undefined) fields['電話番号'] = entity.phone;

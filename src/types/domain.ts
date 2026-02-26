@@ -25,6 +25,8 @@ export interface Facility {
   corporateName: string;
   /** 事業所番号 (10桁) */
   facilityNumber: string;
+  /** 保険者番号 (8桁) */
+  insurerNumber: string;
   /** 所在地 */
   address: string;
   postalCode: string;

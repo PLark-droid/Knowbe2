@@ -119,6 +119,16 @@ describe('buildWageCsvRecords', () => {
 
     expect(records).toHaveLength(0);
   });
+
+  it('should warn when average wage is below 3000 yen', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const result = createMonthlyWageResult({ averageWage: 2999 });
+
+    buildWageCsvRecords(result);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('3,000円未満'));
+    warnSpy.mockRestore();
+  });
 });
 
 describe('encodeWageRecords', () => {

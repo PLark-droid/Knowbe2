@@ -172,7 +172,7 @@ export class BillingCalculator {
 
     if (structure === 'I') {
       category = this.getWageCategory(facility.averageMonthlyWage);
-    } else if (structure === 'II') {
+    } else if (structure === 'II' || structure === 'III' || structure === 'IV' || structure === 'V' || structure === 'VI') {
       category = this.getCapacityCategory(facility.capacity);
     }
 

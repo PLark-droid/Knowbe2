@@ -36,7 +36,7 @@ export function buildKokuhoRenRecords(
     exchangeInfoId: '7121',
     mediaType: '5',
     prefectureCode: facility.facilityNumber.slice(0, 2),
-    insurerNumber: '',
+    insurerNumber: facility.insurerNumber,
     facilityNumber: facility.facilityNumber,
     createdDate: formatDateCompact(now),
     targetYearMonth: formatYearMonthCompact(billing.yearMonth),

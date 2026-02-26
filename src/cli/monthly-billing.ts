@@ -66,6 +66,7 @@ function createStubProvider(): MonthlyBillingDataProvider {
         name: 'テスト事業所',
         corporateName: 'テスト法人',
         facilityNumber: '1300000001',
+        insurerNumber: '13000001',
         address: '東京都千代田区',
         postalCode: '100-0001',
         phone: '03-1234-5678',

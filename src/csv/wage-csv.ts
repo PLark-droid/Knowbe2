@@ -29,6 +29,10 @@ const HEADERS = [
 
 /** 工賃計算結果からCSVレコードを生成 */
 export function buildWageCsvRecords(result: MonthlyWageResult): WageCsvRecord[] {
+  if (result.averageWage < 3000) {
+    console.warn(`WARNING: 平均工賃が3,000円未満です (${result.averageWage}円)`);
+  }
+
   return result.userWages.map((w) => ({
     userNumber: w.userId,
     name: w.name,

@@ -26,6 +26,7 @@ function createFacility(overrides?: Partial<Facility>): Facility {
     name: 'テスト事業所',
     corporateName: 'テスト法人',
     facilityNumber: '1312345678',
+    insurerNumber: '13123456',
     address: '東京都千代田区1-1-1',
     postalCode: '100-0001',
     phone: '03-1234-5678',
@@ -119,7 +120,7 @@ describe('buildKokuhoRenRecords', () => {
   });
 
   it('should set correct control record fields', () => {
-    const facility = createFacility({ facilityNumber: '1312345678' });
+    const facility = createFacility({ facilityNumber: '1312345678', insurerNumber: '13123456' });
     const billing = createBillingResult({ yearMonth: '2025-06' });
     const users = new Map<string, ServiceUser>();
     users.set('user-001', createServiceUser());
@@ -130,6 +131,7 @@ describe('buildKokuhoRenRecords', () => {
     expect(control.exchangeInfoId).toBe('7121');
     expect(control.mediaType).toBe('5');
     expect(control.prefectureCode).toBe('13');
+    expect(control.insurerNumber).toBe('13123456');
     expect(control.facilityNumber).toBe('1312345678');
     expect(control.targetYearMonth).toBe('202506');
   });
