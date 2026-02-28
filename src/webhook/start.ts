@@ -7,14 +7,20 @@ import type { Request, Response } from 'express';
 import { createServer } from './server.js';
 import { createLineWebhookHandler } from './handlers/line.js';
 import { createLarkWebhookHandler } from './handlers/lark.js';
+import { createLarkCardHandler } from './handlers/lark-card.js';
 import { createAttendanceHandler } from './handlers/line-attendance.js';
+import { handleCsvGenerationRequest } from './handlers/csv-generation.js';
 import { validateWebhookSecrets } from './validate-secrets.js';
 import { LarkAuth } from '../lark/auth.js';
 import { BitableClient } from '../lark/client.js';
+import { LarkBotMessaging } from '../lark/bot-messaging.js';
 import { UserRepository } from '../lark/repositories/user.js';
 import { AttendanceRepository } from '../lark/repositories/attendance.js';
 import { HealthCheckRepository } from '../lark/repositories/health-check.js';
+import { FacilityRepository } from '../lark/repositories/facility.js';
+import { InvoiceRepository } from '../lark/repositories/invoice.js';
 import { LineMessagingService } from '../line/messaging.js';
+import type { CsvGenerationDeps } from './handlers/csv-generation.js';
 
 const PORT = parseInt(process.env['PORT'] ?? '3000', 10);
 const LINE_CHANNEL_SECRET = process.env['LINE_CHANNEL_SECRET'] ?? '';
@@ -28,6 +34,9 @@ const LARK_BASE_APP_TOKEN = process.env['LARK_BASE_APP_TOKEN'] ?? '';
 const LARK_TABLE_USER = process.env['LARK_TABLE_USER'] ?? '';
 const LARK_TABLE_ATTENDANCE = process.env['LARK_TABLE_ATTENDANCE'] ?? '';
 const LARK_TABLE_HEALTH_CHECK = process.env['LARK_TABLE_HEALTH_CHECK'] ?? '';
+const LARK_TABLE_FACILITY = process.env['LARK_TABLE_FACILITY'] ?? '';
+const LARK_TABLE_INVOICE = process.env['LARK_TABLE_INVOICE'] ?? '';
+const LARK_CSV_CHAT_ID = process.env['LARK_CSV_CHAT_ID'] ?? '';
 
 const NODE_ENV = process.env['NODE_ENV'] ?? 'development';
 const isProduction = NODE_ENV === 'production';
@@ -83,6 +92,11 @@ const bitableClient = new BitableClient({ auth: larkAuth, appToken: LARK_BASE_AP
 const userRepo = new UserRepository(bitableClient, LARK_TABLE_USER);
 const attendanceRepo = new AttendanceRepository(bitableClient, LARK_TABLE_ATTENDANCE);
 const healthCheckRepo = new HealthCheckRepository(bitableClient, LARK_TABLE_HEALTH_CHECK);
+const facilityRepo = new FacilityRepository(bitableClient, LARK_TABLE_FACILITY);
+const invoiceRepo = new InvoiceRepository(bitableClient, LARK_TABLE_INVOICE);
+
+// ─── Lark Bot Messaging 初期化 ─────────────────────────────
+const botMessaging = new LarkBotMessaging(larkAuth);
 
 // ─── LINE Messaging クライアント初期化 ──────────────────────
 const lineMessaging = LINE_CHANNEL_ACCESS_TOKEN
@@ -116,6 +130,27 @@ const lineHandler = createLineWebhookHandler({
   },
 });
 
+// ─── CSV生成ハンドラー依存 ──────────────────────────────────
+const csvGenerationDeps: CsvGenerationDeps = {
+  invoiceRepo,
+  facilityRepo,
+  userRepo,
+  attendanceRepo,
+  botMessaging,
+  chatId: LARK_CSV_CHAT_ID,
+  getAttendances: async (facilityId, yearMonth) => {
+    const allAttendances = await attendanceRepo.findAll(facilityId);
+    const filtered = allAttendances.filter((a) => a.date.startsWith(yearMonth));
+    const map = new Map<string, typeof filtered>();
+    for (const a of filtered) {
+      const existing = map.get(a.userId) ?? [];
+      existing.push(a);
+      map.set(a.userId, existing);
+    }
+    return map;
+  },
+};
+
 // ─── Lark Webhookハンドラー (レコード作成・更新イベント) ─────
 const larkHandler = createLarkWebhookHandler({
   onRecordCreated: async (tableId, recordId, fields) => {
@@ -125,6 +160,23 @@ const larkHandler = createLarkWebhookHandler({
   onRecordUpdated: async (tableId, recordId, fields) => {
     console.log(`[Lark] Record updated: table=${tableId} record=${recordId}`, fields);
   },
+  invoiceTableId: LARK_TABLE_INVOICE,
+  onCsvGenerationRequested: async (recordId, fields) => {
+    console.log(`[Lark] CSV generation requested: record=${recordId}`, fields);
+    // Invoice レコードを取得して CSV 生成フローを開始
+    const invoice = await invoiceRepo.findById(recordId, String(fields['事業所ID'] ?? ''));
+    if (invoice) {
+      await handleCsvGenerationRequest(csvGenerationDeps, invoice);
+    } else {
+      console.error(`[Lark] Invoice not found for CSV generation: ${recordId}`);
+    }
+  },
+});
+
+// ─── Lark カードコールバックハンドラー ──────────────────────
+const larkCardHandler = createLarkCardHandler({
+  csvGenerationDeps,
+  verificationToken: LARK_VERIFICATION_TOKEN || undefined,
 });
 
 // ─── 体調チェックAPIハンドラー ────────────────────────────────
@@ -191,6 +243,7 @@ const server = createServer({
   larkVerificationToken: LARK_VERIFICATION_TOKEN,
   lineWebhookHandler: lineHandler,
   larkWebhookHandler: larkHandler,
+  larkCardHandler,
   healthCheckApiHandler,
 });
 
@@ -201,7 +254,9 @@ console.log(`
    http://localhost:${PORT}/health        ← ヘルスチェック
    POST /webhook/line                     ← LINE Webhook
    POST /webhook/lark                     ← Lark Webhook
+   POST /webhook/lark/card                ← Lark Card Callback
    POST /api/health-check                 ← 体調チェックAPI
    Lark Base: ${LARK_BASE_APP_TOKEN ? '接続済み' : '未接続'}
    LINE Messaging: ${LINE_CHANNEL_ACCESS_TOKEN ? '有効' : '無効'}
+   CSV Chat ID: ${LARK_CSV_CHAT_ID ? '設定済み' : '未設定'}
 `);

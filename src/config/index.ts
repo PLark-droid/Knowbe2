@@ -16,6 +16,8 @@ export interface AppConfig {
     appSecret: string;
     baseAppToken: string;
     verificationToken: string;
+    /** CSV生成通知先チャットID */
+    csvChatId: string;
   };
   /** サーバー設定 */
   server: {
@@ -99,6 +101,7 @@ export function loadConfig(options?: { required?: boolean }): AppConfig {
       appSecret: getEnv('LARK_APP_SECRET'),
       baseAppToken: getEnv('LARK_BASE_APP_TOKEN'),
       verificationToken: getEnv('LARK_VERIFICATION_TOKEN'),
+      csvChatId: process.env['LARK_CSV_CHAT_ID'] ?? '',
     },
     server: {
       port: parsePort(process.env['PORT']),

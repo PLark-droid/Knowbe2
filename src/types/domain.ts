@@ -244,7 +244,11 @@ export interface Invoice {
 export type InvoiceStatus =
   | 'draft'
   | 'calculated'
+  | 'csv_generation_requested'
+  | 'confirming'
+  | 'generating'
   | 'csv_generated'
+  | 'cancelled'
   | 'submitted'
   | 'accepted'
   | 'rejected'

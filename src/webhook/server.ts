@@ -15,6 +15,8 @@ export interface ServerDeps {
   larkWebhookHandler: (req: Request, res: Response) => Promise<void>;
   healthCheckApiHandler?: (req: Request, res: Response) => Promise<void>;
   csvDownloadHandler?: (req: Request, res: Response) => Promise<void>;
+  /** Lark カードコールバックハンドラー (POST /webhook/lark/card) */
+  larkCardHandler?: (req: Request, res: Response) => Promise<void>;
 }
 
 /** Request extended with rawBody for signature verification */
@@ -61,6 +63,11 @@ export function createServer(deps: ServerDeps) {
   // CSV download (placeholder)
   if (deps.csvDownloadHandler) {
     app.get('/api/csv/kokuho-ren', deps.csvDownloadHandler);
+  }
+
+  // Lark card callback
+  if (deps.larkCardHandler) {
+    app.post('/webhook/lark/card', deps.larkCardHandler);
   }
 
   // Error handler

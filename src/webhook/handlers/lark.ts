@@ -20,6 +20,13 @@ export interface LarkWebhookDeps {
     recordId: string,
     fields: Record<string, unknown>,
   ) => Promise<void>;
+  /** Invoice テーブルのステータスが "CSV生成依頼" に変更された際に呼ばれるハンドラー */
+  onCsvGenerationRequested?: (
+    recordId: string,
+    fields: Record<string, unknown>,
+  ) => Promise<void>;
+  /** Invoice テーブルのテーブルID (CSV生成依頼検出用) */
+  invoiceTableId?: string;
 }
 
 /**
@@ -64,6 +71,18 @@ export function createLarkWebhookHandler(deps: LarkWebhookDeps) {
       ) {
         if (deps.onRecordUpdated) {
           await deps.onRecordUpdated(tableId, recordId, fields);
+        }
+
+        // Invoice テーブルのステータス変更を検出
+        if (
+          deps.onCsvGenerationRequested &&
+          deps.invoiceTableId &&
+          tableId === deps.invoiceTableId
+        ) {
+          const statusValue = fields['ステータス'];
+          if (statusValue === 'CSV生成依頼' || statusValue === 'csv_generation_requested') {
+            await deps.onCsvGenerationRequested(recordId, fields);
+          }
         }
       }
 

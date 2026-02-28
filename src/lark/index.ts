@@ -5,6 +5,8 @@
 export { LarkAuth } from './auth.js';
 export { BitableClient, LarkApiError, isRetryableApiError } from './client.js';
 export type { BitableClientConfig } from './client.js';
+export { LarkBotMessaging, buildCsvGenerationCard, buildCsvCompletionCard, buildCsvCancellationCard } from './bot-messaging.js';
+export type { LarkMessageCard, CsvGenerationCardParams } from './bot-messaging.js';
 export { LinkResolver, NullLinkResolver } from './link-resolver.js';
 export type { LinkResolverConfig, LinkTargetType } from './link-resolver.js';
 export { getLinkRecordId, toLinkValue } from './link-helpers.js';
