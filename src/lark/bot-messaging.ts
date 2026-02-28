@@ -5,13 +5,13 @@
  * CSV生成確認カードの送信と結果通知を担当する。
  *
  * API Reference:
- * - Send Message: POST https://open.feishu.cn/open-apis/im/v1/messages
+ * - Send Message: POST https://open.larksuite.com/open-apis/im/v1/messages
  * - Message Card: https://open.larkoffice.com/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message-card
  */
 
 import type { LarkAuth } from './auth.js';
 
-const SEND_MESSAGE_URL = 'https://open.feishu.cn/open-apis/im/v1/messages';
+const SEND_MESSAGE_URL = 'https://open.larksuite.com/open-apis/im/v1/messages';
 
 /** Lark IM API レスポンス */
 interface LarkImResponse {
